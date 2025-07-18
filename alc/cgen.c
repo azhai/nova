@@ -158,7 +158,7 @@ void cgglobsym(Sym * s) {
 	    s->name, qtype, qtype, s->initval.dblval);
     break;
   default:
-    fprintf(Outfh, "export data $%s = { %s %ld, }\n",
+    fprintf(Outfh, "export data $%s = { %s %lld, }\n",
 	    s->name, qtype, s->initval.intval);
   }
 }
@@ -188,7 +188,7 @@ int cgloadlit(Litval value, Type * type) {
 	    value.dblval);
     break;
   default:
-    fprintf(Outfh, "  %%.t%d =%s copy %ld\n", t, qtype, value.intval);
+    fprintf(Outfh, "  %%.t%d =%s copy %lld\n", t, qtype, value.intval);
   }
   return (t);
 }
@@ -353,6 +353,7 @@ int cgcast(int t1, Type * type, Type * newtype) {
     else		   type = ty_int32;
     break;
   default:
+    break;
   }
 
   // Get the matching QBE types

@@ -665,7 +665,7 @@ static ASTnode *multiplicative_expression(void) {
 //-       | variable
 //-
 static ASTnode *factor(void) {
-  ASTnode *f;
+  ASTnode *f = NULL;
 
   switch(Thistoken.token) {
   case T_NUMLIT:

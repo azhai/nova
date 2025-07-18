@@ -2,7 +2,7 @@
 # Run each test and compare
 # against known good output
 
-EXE = ../bin/ac0
+EXE=../bin/ac0
 
 # Build our compiler if needed
 if [ ! -f "$EXE" ]

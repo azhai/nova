@@ -5,6 +5,7 @@
 *.bak
 *.log
 *.lock
+*.o
 *.out
 *.swap
 *.swp

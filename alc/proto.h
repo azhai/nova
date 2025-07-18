@@ -1,4 +1,6 @@
 // astnodes.c
+typedef unsigned int uint;
+
 ASTnode *mkastnode(int op, ASTnode *left, ASTnode *mid, ASTnode *right);
 ASTnode *mkastleaf(int op, Type *type, bool rvalue, Sym *sym, uint64_t uintval);
 void freeAST(ASTnode *n);
