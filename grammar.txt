@@ -1,0 +1,245 @@
+input_file= ( type_declaration
+            | enum_declaration
+            | global_var_declaration
+            | function_declaration
+            )* EOF
+
+type_declaration= TYPE IDENT SEMI
+                | TYPE IDENT ASSIGN type integer_range? SEMI
+                | TYPE IDENT ASSIGN struct_declaration  SEMI
+                | TYPE IDENT ASSIGN funcptr_declaration SEMI
+
+integer_range= RANGE NUMLIT ... NUMLIT
+
+funcptr_declaration= FUNCPTR type
+                     LPAREN type_list (COMMA ELLIPSIS)? RPAREN
+
+type_list= CONST? INOUT? type (COMMA CONST? INOUT? type)*
+
+enum_declaration= ENUM LBRACE enum_list RBRACE SEMI
+
+enum_list= enum_item (COMMA enum_item)*
+
+enum_item= IDENT
+         | IDENT ASSIGN NUMLIT
+
+struct_declaration= STRUCT LBRACE struct_list RBRACE
+
+struct_list= struct_item (COMMA struct_item)*
+
+struct_item= array_typed_declaration
+           | union_declaration
+
+union_declaration= UNION LBRACE typed_declaration_list RBRACE
+
+visibility= ( PUBLIC | EXTERN )?
+
+global_var_declaration= visibility array_typed_declaration
+                        decl_initialisation? SEMI
+
+decl_initialisation= ASSIGN expression
+                   | ASSIGN bracketed_expression_list
+
+function_declaration= visibility function_prototype statement_block
+                    | visibility function_prototype SEMI
+
+function_prototype= typed_declaration LPAREN
+                    ( typed_declaration_list (COMMA ELLIPSIS)?
+                    | VOID
+                    ) RPAREN (THROWS typed_declaration )?
+
+typed_declaration_list= typed_declaration (COMMA typed_declaration_list)*
+
+array_typed_declaration= typed_declaration (array_size | assoc_keytype)?
+
+array_size= LBRACKET NUMLIT RBRACKET
+
+assoc_keytype= LBRACKET type RBRACKET
+
+typed_declaration= CONST? INOUT? type IDENT
+
+type= (builtin_type | user_defined_type) STAR*
+
+builtin_type= 'void'  | 'bool'
+            | 'int8'  | 'int16'  | 'int32'  | 'int64'
+            | 'uint8' | 'uint16' | 'uint32' | 'uint64'
+            | 'flt32' | 'flt64'
+
+user_defined_type= IDENT
+
+statement_block= LBRACE declaration_stmts procedural_stmts RBRACE
+               | procedural_stmt
+
+declaration_stmts= ( array_typed_declaration decl_initialisation? SEMI
+                   )*
+
+procedural_stmts= ( assign_stmt
+                  | if_stmt
+                  | while_stmt
+                  | for_stmt
+                  | foreach_stmt
+                  | return_stmt
+                  | abort_stmt
+                  | break_stmt
+                  | continue_stmt
+                  | try_stmt
+                  | switch_stmt
+                  | fallthru_stmt
+                  | va_start_stmt
+                  | va_end_stmt
+                  | undef_stmt
+                  | function_call SEMI
+                  )*
+
+assign_stmt= short_assign_stmt SEMI
+
+short_assign_stmt= unary_expression ASSIGN expression
+                 | postfix_variable ASSIGN CONST
+                 | postfix_variable POSTINC
+                 | postfix_variable POSTDEC
+
+
+if_stmt= IF LPAREN expression RPAREN statement_block
+         (ELSE statement_block)?
+
+while_stmt= WHILE LPAREN expression RPAREN statement_block
+          | WHILE LPAREN TRUE RPAREN statement_block
+
+for_stmt= FOR LPAREN (LBRACE procedural_stmts RBRACE | short_assign_stmt)?
+                      SEMI expression? SEMI
+                     (LBRACE procedural_stmts RBRACE | short_assign_stmt)?
+              RPAREN statement_block
+
+foreach_stmt= FOREACH postfix_variable LPAREN
+              ( postfix_variable
+              | expression ELLIPSIS expression
+              | postfix_variable COMMA postfix_variable
+              | function_call
+              ) RPAREN statement_block
+
+return_stmt= RETURN LPAREN expression RPAREN SEMI
+           | RETURN SEMI
+
+abort_stmt= ABORT SEMI
+
+break_stmt= BREAK SEMI
+
+continue_stmt= CONTINUE SEMI
+
+try_statement= TRY LPAREN IDENT RPAREN statement_block CATCH statement_block
+
+switch_stmt= SWITCH LPAREN expression RPAREN switch_stmt_block
+
+switch_stmt_block= ( case_stmt
+                   | default_stmt
+                   )+
+
+case_stmt= CASE expression COLON procedural_stmts?
+
+default_stmt= DEFAULT COLON procedural_stmts
+
+fallthru_stmt= FALLTHRU SEMI
+
+function_call= IDENT LPAREN expression_list? RPAREN
+             | IDENT LPAREN named_expression_list RPAREN
+
+va_start_stmt= VA_START LPAREN IDENT RPAREN SEMI
+
+va_end_stmt= VA_END LPAREN IDENT RPAREN SEMI
+
+undef_stmt= UNDEF LPAREN postfix_expression RPAREN SEMI
+
+bracketed_expression_list= LBRACE bracketed_expression_element
+                                  (COMMA bracketed_expression_element)*
+                           RBRACE
+
+bracketed_expression_element= expression
+                            | bracketed_expression_list
+
+expression_list= expression (COMMA expression_list)*
+
+named_expression_list= IDENT ASSIGN expression
+                       (COMMA named_expression_list)*
+
+expression= ternary_expression
+
+ternary_expression= bitwise_expression
+                  | LPAREN relational_expression RPAREN
+                    QUESTION ternary_expression COLON ternary_expression
+
+bitwise_expression= ( INVERT boolean_expression
+                    |        boolean_expression
+                    )
+                    ( AND boolean_expression
+                    | OR  boolean_expression
+                    | XOR boolean_expression
+                    )*
+
+boolean_expression= logical_and_expression
+
+logical_and_expression= logical_or_expression
+                      | logical_or_expression LOGAND logical_or_expression
+
+logical_or_expression= relational_expression
+                     | relational_expression LOGOR relational_expression
+
+relational_expression= ( NOT shift_expression
+                       |     shift_expression
+                       )
+                       ( GE shift_expression
+                       | GT shift_expression
+                       | LE shift_expression
+                       | LT shift_expression
+                       | EQ shift_expression
+                       | NE shift_expression
+                       )?
+
+shift_expression= additive_expression
+                ( LSHIFT additive_expression
+                | RSHIFT additive_expression
+                )*
+
+additive_expression= ( PLUS? multiplicative_expression
+                     | MINUS multiplicative_expression
+                     )
+                     ( PLUS  multiplicative_expression
+                     | MINUS multiplicative_expression
+                     )*
+
+multiplicative_expression= unary_expression
+                         ( STAR  unary_expression
+                         | SLASH unary_expression
+                         | MOD unary_expression
+                         )*
+
+unary_expression= primary_expression
+                | STAR unary_expression
+                | AMPER primary_expression
+
+primary_expression= NUMLIT
+                  | CONST? STRLIT
+                  | TRUE
+                  | FALSE
+                  | NULL
+                  | ENUMVAL
+                  | sizeof_expression
+                  | va_arg_expression
+                  | cast_expression
+                  | exists_expression
+                  | postfix_variable
+                  | function_call
+                  | LPAREN expression RPAREN
+
+sizeof_expression= SIZEOF LPAREN type RPAREN
+                 | SIZEOF LPAREN IDENT RPAREN
+
+va_arg_expression= VA_ARG LPAREN IDENT COMMA type RPAREN
+
+cast_expression= CAST LPAREN expression COMMA type PAREN
+
+exists_expression= EXISTS LPAREN postfix_variable RPAREN
+
+postfix_variable= IDENT
+                | postfix_variable DOT IDENT
+                | postfix_variable LBRACKET expression RBRACKET
+
