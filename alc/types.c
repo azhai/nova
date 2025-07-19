@@ -101,7 +101,7 @@ ASTnode *widen_type(ASTnode *node, Type *ty) {
     if (ty->is_unsigned && !node->type->is_unsigned
 				&& node->litval.intval < 0) {
       sprintf(buffer, LONG_FORMAT, node->litval.intval);
-      fatal("Cannot cast negative literal value %s to be unsigned\n",buffer);
+      fatal("Cannot cast negative literal value %s to be unsigned\n", buffer);
 	}
 
     // Deal with changing int literals to float literals
