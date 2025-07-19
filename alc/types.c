@@ -71,7 +71,7 @@ char *get_typename(Type * ty) {
 // or NULL if the types are not compatible.
 ASTnode *widen_type(ASTnode *node, Type *ty) {
   ASTnode *newnode;
-  char *buffer = NULL;
+  char buffer[30];
 
   // They have the same type, nothing to do
   if (node->type == ty) return(node);

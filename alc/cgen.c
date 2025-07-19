@@ -149,7 +149,7 @@ void cgglobsym(Sym * s) {
   if (s == NULL) return;
 
   // Get the matching QBE type
-  char *buffer = NULL;
+  char buffer[30];
   char *qtype = qbe_storetype(s->type);
 
   switch (s->type->kind) {
@@ -181,7 +181,7 @@ int cgloadlit(Litval value, Type * type) {
   int t = cgalloctemp();
 
   // Get the matching QBE type
-  char *buffer = NULL;
+  char buffer[30];
   char *qtype = qbetype(type);
 
   switch (type->kind) {
