@@ -7,6 +7,8 @@
 *.lock
 *.o
 *.out
+*.q
+*.s
 *.swap
 *.swp
 *.sublime-project

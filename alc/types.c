@@ -71,6 +71,7 @@ char *get_typename(Type * ty) {
 // or NULL if the types are not compatible.
 ASTnode *widen_type(ASTnode *node, Type *ty) {
   ASTnode *newnode;
+  char *buffer = NULL;
 
   // They have the same type, nothing to do
   if (node->type == ty) return(node);
@@ -98,9 +99,10 @@ ASTnode *widen_type(ASTnode *node, Type *ty) {
   if (node->op == A_NUMLIT) {
     // Check we're not trying to make a negative A_NUMLIT unsigned.
     if (ty->is_unsigned && !node->type->is_unsigned
-				&& node->litval.intval < 0)
-      fatal("Cannot cast negative literal value %lld to be unsigned\n",
-	      node->litval.intval);
+				&& node->litval.intval < 0) {
+      sprintf(buffer, LONG_FORMAT, node->litval.intval);
+      fatal("Cannot cast negative literal value %s to be unsigned\n",buffer);
+	}
 
     // Deal with changing int literals to float literals
     if (is_integer(node->type) && is_flonum(ty))

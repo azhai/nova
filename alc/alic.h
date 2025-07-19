@@ -11,6 +11,12 @@
 #include <unistd.h>
 #include <limits.h>
 
+#ifdef __APPLE__
+    #define LONG_FORMAT "%lld"
+#else
+    #define LONG_FORMAT "%ld"
+#endif
+
 // Built-in type ids.
 typedef enum {
   TY_VOID,  TY_BOOL,  TY_INT8,  TY_INT16,

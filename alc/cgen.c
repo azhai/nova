@@ -149,6 +149,7 @@ void cgglobsym(Sym * s) {
   if (s == NULL) return;
 
   // Get the matching QBE type
+  char *buffer = NULL;
   char *qtype = qbe_storetype(s->type);
 
   switch (s->type->kind) {
@@ -158,8 +159,9 @@ void cgglobsym(Sym * s) {
 	    s->name, qtype, qtype, s->initval.dblval);
     break;
   default:
-    fprintf(Outfh, "export data $%s = { %s %lld, }\n",
-	    s->name, qtype, s->initval.intval);
+    sprintf(buffer, LONG_FORMAT, s->initval.intval);
+    fprintf(Outfh, "export data $%s = { %s %s, }\n",
+	    s->name, qtype, buffer);
   }
 }
 
@@ -179,6 +181,7 @@ int cgloadlit(Litval value, Type * type) {
   int t = cgalloctemp();
 
   // Get the matching QBE type
+  char *buffer = NULL;
   char *qtype = qbetype(type);
 
   switch (type->kind) {
@@ -188,7 +191,8 @@ int cgloadlit(Litval value, Type * type) {
 	    value.dblval);
     break;
   default:
-    fprintf(Outfh, "  %%.t%d =%s copy %lld\n", t, qtype, value.intval);
+    sprintf(buffer, LONG_FORMAT, value.intval);
+    fprintf(Outfh, "  %%.t%d =%s copy %s\n", t, qtype, buffer);
   }
   return (t);
 }
