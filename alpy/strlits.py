@@ -1,6 +1,6 @@
 from typing import Dict, Optional
 
-from defs import Strlit, Outfh
+from defs import Strlit, OutFile
 
 
 class StrLitProcessor:
@@ -35,7 +35,7 @@ class StrLitProcessor:
             escaped = escaped.replace('\r', '\\r').replace('\t', '\\t').replace('\v', '\\v')
             escaped = escaped.replace('\\', '\\\\').replace('"', '\\"')
             # 生成数据定义
-            print(f"data $L{strlit.label} = {{ b \"{escaped}\", b 0 }}", file=Outfh)
+            print(f"data $L{strlit.label} = {{ b \"{escaped}\", b 0 }}", file=OutFile)
             strlit = strlit.next
 
     def get_strlit_label(self, value: str) -> int:

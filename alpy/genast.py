@@ -1,6 +1,6 @@
 from typing import Optional
 
-from defs import ASTNode, ASTNodeType, DataType, SymType, Outfh, fatal
+from defs import ASTNode, ASTNodeType, DataType, SymType, OutFile, fatal
 from cgen import (
     cgloadlit, cgloadvar, cgstorvar, cgadd, cgsub, cgmul, cgdiv,
     cgnegate, cgcompare, cgjump, cgjump_if_false, cgnot, cginvert,
@@ -126,7 +126,7 @@ class ASTCodeGenerator:
             return cgcall(node.sym, len(args), args, arg_types)
         elif node.op == ASTNodeType.A_RETURN:
             expr_temp = cls.gen_ast(node.left)
-            print(f"  ret {expr_temp}", file=Outfh)
+            print(f"  ret {expr_temp}", file=OutFile)
             return expr_temp
         elif node.op == ASTNodeType.A_BLOCK:
             # 处理语句块中的所有语句

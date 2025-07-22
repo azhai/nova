@@ -1,5 +1,18 @@
 from typing import Optional, List, Dict
-from defs import Sym, SymType, Outfh, TypeKind, fatal
+from defs import Sym, SymType, OutFile, TypeKind, fatal
+
+class SymTable:
+    """ 符号表节点 """
+    name: str
+    parent: Optional['SymTable']
+    # children: Dict[str, 'SymTable']
+    # sym_dict: Dict[str, Sym]
+
+    def __init__(self, name: str, parent: Optional['SymTable'] = None):
+        self.name = name
+        self.parent = parent
+        self.children = {}
+        self.sym_dict = {}
 
 
 class SymProcessor:
@@ -79,16 +92,17 @@ class SymProcessor:
 
     def dump_syms(self) -> None:
         """ 打印符号表内容（调试用） """
-        print("Symbol table:", file=Outfh)
+        print("Symbol table:", file=OutFile)
         for i, scope in enumerate(self.sym_stack):
-            print(f"Scope {i}:", file=Outfh)
+            print(f"Scope {i}:", file=OutFile)
             for name, sym in scope.items():
                 from typs import get_typename
                 typestr = get_typename(sym.type)
-                print(f"  {name}: type={typestr}, kind={sym.sym_type}", file=Outfh)
+                print(f"  {name}: type={typestr}, kind={sym.sym_type}", file=OutFile)
 
 
 # 创建符号处理器实例并导出函数
+root = SymTable("")
 sym_processor = SymProcessor()
 set_cur_func = sym_processor.set_cur_func
 add_symbol = sym_processor.add_symbol

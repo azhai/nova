@@ -1,6 +1,6 @@
 import sys
 from typing import Optional
-from defs import ASTNode, ASTNodeType, TypeKind, Debugfh, fatal
+from defs import ASTNode, ASTNodeType, TypeKind, DebugFile, fatal, quote_string
 from typs import TypeProcessor
 
 _astname = [
@@ -53,7 +53,7 @@ def dump_ast(out, node: Optional[ASTNode], level: int = 0) -> None:
 
     # Print indentation
     if out is None:
-        out = Debugfh or sys.stdout
+        out = DebugFile or sys.stdout
     for _ in range(level):
         out.write(" ")
 
@@ -69,20 +69,22 @@ def dump_ast(out, node: Optional[ASTNode], level: int = 0) -> None:
     out.write(f"{op_name} ")
 
     # Print node-specific information
-    if node.op == ASTNodeType.A_NUMLIT:
-        if node.type and node.type.kind in (TypeKind.TY_FLT32, TypeKind.TY_FLT64):
-            out.write(f"{node.numlit.dblval}")
-        else:
-            out.write(f"{node.numlit.intval}")
-    elif node.op == ASTNodeType.A_ASSIGN:
-        out.write(f"{node.sym.name} = ")
-    elif node.op == ASTNodeType.A_LOCAL:
-        out.write(f"{node.sym.name}")
-    elif node.op == ASTNodeType.A_IDENT:
+    if node.op == ASTNodeType.A_IDENT:
         if node.rvalue:
             out.write(f"rval {node.strlit}")
         else:
             out.write(f"{node.strlit}")
+    elif node.op == ASTNodeType.A_STRLIT:
+        out.write(f"({quote_string(node.strlit)})")
+    elif node.op == ASTNodeType.A_NUMLIT:
+        if node.type and node.type.kind in (TypeKind.TY_FLT32, TypeKind.TY_FLT64):
+            out.write(f"({node.numlit.dblval})")
+        else:
+            out.write(f"({node.numlit.intval})")
+    elif node.op == ASTNodeType.A_ASSIGN:
+        out.write(f"{node.sym.name} = ")
+    elif node.op == ASTNodeType.A_LOCAL:
+        out.write(f"{node.sym.name}")
     elif node.op in (ASTNodeType.A_PRINT, ASTNodeType.A_PRINTF, ASTNodeType.A_FUNCCALL):
         if node.left:
             out.write(f"\"{node.left.strlit}\"")

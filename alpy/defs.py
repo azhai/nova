@@ -1,7 +1,11 @@
 import sys
+import argparse
 from enum import IntEnum
-from typing import Optional, List
+from typing import Optional
 
+# Global variables
+OutFile: Optional[object] = None
+DebugFile: Optional[object] = None
 
 def fatal(msg: str):
     raise Exception(f"Fatal error: {msg}")
@@ -11,8 +15,60 @@ def notice(msg: str):
     print(f"Notice error: {msg}")
 
 
-def init_global_vars():
-    pass
+def slash_char(c: str) -> str:
+    if c == 'a': return '\a'
+    if c == 'b': return '\b'
+    if c == 'f': return '\f'
+    if c == 'n': return '\n'
+    if c == 'r': return '\r'
+    if c == 't': return '\t'
+    if c == 'v': return '\v'
+    if c in ['"', '\'', '\\']: return c
+    return ''
+
+
+def quote_char(c: str) -> str:
+    if c == '\a': return '\\a'
+    if c == '\b': return '\\b'
+    if c == '\f': return '\\f'
+    if c == '\n': return '\\n'
+    if c == '\r': return '\\r'
+    if c == '\t': return '\\t'
+    if c == '\v': return '\\v'
+    if c == '\\': return '\\\\'
+    return c
+
+
+def quote_string(s: str) -> str:
+    return ''.join([quote_char(c) for c in s])
+
+
+def init_global_vars(args: argparse.Namespace) -> str:
+    global OutFile, DebugFile
+    # 设置输出文件
+    output_file = args.output or 'out.q'
+    try:
+        OutFile = open(output_file, 'w')
+    except IOError as e:
+        fatal(f"Cannot open output file {output_file}: {e}")
+
+    # 设置调试文件
+    if args.debug:
+        try:
+            DebugFile = open('debug.log', 'w')
+        except IOError as e:
+            fatal(f"Cannot open debug file: {e}")
+    else:
+        DebugFile = None
+    return output_file
+
+def close_all_files(output_file: str):
+    global OutFile, DebugFile
+    if OutFile:
+        OutFile.close()
+    if DebugFile:
+        DebugFile.close()
+    print(f"Compilation successful. Output written to {output_file}", file=sys.stderr)
 
 
 def read_file(filename: str) -> str:
@@ -145,20 +201,24 @@ class Strlit:
 
 class SymType(IntEnum):
     SYM_VAR = 1
-    SYM_FUNC = 2
-    SYM_LOCAL = 3
+    SYM_LOCAL = 2
+    SYM_FUNC = 3
 
 
 class Sym:
+    name: str
+    sym_type: SymType
+    val_type: DataType
+
     def __init__(self, name: str, sym_type: SymType, val_type: DataType):
         self.name = name
         self.sym_type = sym_type
         self.has_addr: bool = False
         self.type: DataType = val_type
         self.init_val: Litval = Litval()
-        self.count: int = 0
-        self.memb: Optional[Sym] = None
-        self.next: Optional[Sym] = None
+        # self.count: int = 0
+        # self.memb: Optional[Sym] = None
+        # self.next: Optional[Sym] = None
 
 
 class ASTNodeType(IntEnum):
@@ -262,18 +322,3 @@ def cast_node(node: ASTNode, new_type: DataType) -> ASTNode | None:
     )
     new_node.rvalue = True
     return new_node
-
-
-# Global variables
-Infilename: Optional[str] = None
-Infh: Optional[object] = None
-Outfh: Optional[object] = None
-Debugfh: Optional[object] = None
-Line: int = 1
-Peektoken: Token = Token()
-Thistoken: Token = Token()
-Text: List[str] = []
-Symhead: Optional[Sym] = None
-O_dumptokens: bool = False
-O_dumpsyms: bool = False
-O_dumpast: bool = False

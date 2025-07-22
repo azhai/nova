@@ -1,6 +1,5 @@
 import sys
-
-from defs import TokenType, NumType, Token, Thistoken, fatal, read_file
+from defs import TokenType, NumType, Token, fatal, read_file, slash_char
 
 TextLen = 512
 Keywords = {
@@ -39,18 +38,6 @@ class Lexer:
         self.pos, self.size = -1, len(self.source)
 
     @staticmethod
-    def slash_char(c: str) -> str:
-        if c == 'a': return '\a'
-        if c == 'b': return '\b'
-        if c == 'f': return '\f'
-        if c == 'n': return '\n'
-        if c == 'r': return '\r'
-        if c == 't': return '\t'
-        if c == 'v': return '\v'
-        if c in ['"', '\'', '\\']: return c
-        return ''
-
-    @staticmethod
     def ord_char(s: str, c: str) -> int:
         for i, char in enumerate(s):
             if char == c:
@@ -78,7 +65,7 @@ class Lexer:
         if c != '\\':
             return c
         c = self.next_char()
-        c2 = self.slash_char(c)
+        c2 = slash_char(c)
         if c2 != '':
             return c2
 
@@ -250,46 +237,14 @@ class Lexer:
         fatal(f"Unknown character {c}")
         return None
 
-    def next(self) -> int:
-        if self.Putback:
-            c = self.Putback
-            self.Putback = 0
-            return c
+    # while self.AtBegin and c == ord('#'):
+    #     self.AtBegin = 0
+    #     self.scan(Thistoken)
+    #     if Thistoken.token != TokenType.T_NUMLIT:
+    #         fatal(f"Expecting pre-processor line number, got {Text}")
+    #     l = Thistoken.num_val
+    #
+    #     self.scan(Thistoken)
+    #     if Thistoken.token != TokenType.T_STRLIT:
+    #         fatal(f"Expecting pre-processor file name, got {Text}")
 
-        c = self.Infh.read(1)
-        if not c:  # EOF
-            return 0
-        c = ord(c)
-
-        while self.AtBegin and c == ord('#'):
-            self.AtBegin = 0
-            self.scan(Thistoken)
-            if Thistoken.token != TokenType.T_NUMLIT:
-                fatal(f"Expecting pre-processor line number, got {Text}")
-            l = Thistoken.num_val
-
-            self.scan(Thistoken)
-            if Thistoken.token != TokenType.T_STRLIT:
-                fatal(f"Expecting pre-processor file name, got {Text}")
-
-            # if Text[0] != '<':
-            #     global Infilename
-            #     if Text != Infilename:
-            #         Infilename = Text
-            #     Line = l
-
-            while True:
-                c = self.Infh.read(1)
-                if not c or c == '\n':
-                    break
-            c = self.Infh.read(1)
-            if not c:
-                return 0
-            c = ord(c)
-            self.AtBegin = 1
-
-        self.AtBegin = 0
-        if c == ord('\n'):
-            self.LineNo += 1
-            self.AtBegin = 1
-        return c

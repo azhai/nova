@@ -23,10 +23,9 @@
 
 import argparse
 import sys
-
-from defs import fatal, init_global_vars
+from defs import init_global_vars, close_all_files
 from astnodes import dump_ast
-from cgen import cg_file_preamble
+from cgen import cg_file_preamble, cg_file_postamble
 from lexer import Lexer
 from parser import Parser
 from strlits import gen_strlits
@@ -34,65 +33,42 @@ from syms import gen_glob_syms
 
 
 def main():
-    # 初始化全局变量
-    init_global_vars()
-
     # 解析命令行参数
     parser = argparse.ArgumentParser(description='Alic Compiler')
     parser.add_argument('input_file', help='Input source file')
-    parser.add_argument('-o', '--output', help='Output file (default: out.ssa)')
+    parser.add_argument('-o', '--output', help='Output file (default: out.q)')
     parser.add_argument('-d', '--debug', action='store_true', help='Enable debug output')
     args = parser.parse_args()
 
-    # 设置输出文件
-    output_file = args.output or 'out.ssa'
-    try:
-        Outfh = open(output_file, 'w')
-    except IOError as e:
-        fatal(f"Cannot open output file {output_file}: {e}")
-
-    # 设置调试文件
-    if args.debug:
-        try:
-            Debugfh = open('debug.log', 'w')
-        except IOError as e:
-            fatal(f"Cannot open debug file: {e}")
-    else:
-        Debugfh = None
-
-    # 解析程序
+    output_file = init_global_vars(args)
     print("Parsing...", file=sys.stderr)
-    filename = args.input_file or "tests/test001.al"
-    lexer = Lexer(filename)
-    lexer.dump_tokens()
-
-    parser = Parser(lexer)
-    nodes = parser.parse_program()
-    print("\nAST nodes:")
-    for ast in nodes:
-        dump_ast(None, ast)
-    # print(repr(ast))
-    # genAST(ast)
-    # if not ast:
-    #     fatal("Parse failed")
-    return
-
-    # 添加类型信息
-    print("Adding type information...", file=sys.stderr)
-    # add_type(ast)
+    input_file = args.input_file or "tests/test001.al"
 
     # 生成代码
     print("Generating code...", file=sys.stderr)
     cg_file_preamble()
-    gen_glob_syms()
+    parse_program(input_file)
+    # gen_glob_syms()
     gen_strlits()
-    gen_func_statement_block(None, ast)
+    # gen_func_statement_block(None, ast)
+    cg_file_postamble()
 
     # 清理
-    Outfh.close()
-    if Debugfh:
-        Debugfh.close()
-    print(f"Compilation successful. Output written to {output_file}", file=sys.stderr)
+    close_all_files(output_file)
+
+
+def parse_program(filename: str):
+    lexer = Lexer(filename)
+    lexer.dump_tokens()
+    parser = Parser(lexer)
+    ast = parser.parse_program()
+    print("\nAST nodes:")
+    dump_ast(None, ast)
+    # gen_ast(ast)
+    # 添加类型信息
+    # print("Adding type information...", file=sys.stderr)
+    # add_type(ast)
+    return
 
 
 if __name__ == '__main__':

@@ -1,5 +1,7 @@
 // astnodes.c
-typedef uint32_t uint;
+#ifdef __APPLE__
+    #define uint uint32_t
+#endif
 
 ASTnode *mkastnode(int op, ASTnode *left, ASTnode *mid, ASTnode *right);
 ASTnode *mkastleaf(int op, Type *type, bool rvalue, Sym *sym, uint64_t uintval);

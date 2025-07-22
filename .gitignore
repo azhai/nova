@@ -19,6 +19,6 @@
 .vscode/
 __pycache__/
 alpy/out.*
-bin/ac*
+bin/*
 tmp/
 vendor/

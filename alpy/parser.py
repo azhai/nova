@@ -1,3 +1,5 @@
+import sys
+from alpy.astnodes import dump_ast
 from defs import (
     ASTNode, ASTNodeType, DataType, Litval, Sym, TokenType, Token,
     fatal, ty_void, ty_bool, ty_int8, ty_int16, ty_int32, ty_int64,
@@ -12,10 +14,11 @@ from syms import SymProcessor
 
 class Parser:
     finder = SymProcessor()
+    leaves = []
 
     def __init__(self, lexer: Lexer = None):
         self.lexer = lexer
-        self.curr, self.peek = None, None
+        self.curr = None
 
     @staticmethod
     def gen_number_node(token: Token) -> (DataType, Litval):
@@ -29,65 +32,65 @@ class Parser:
             node.numlit.intval = token.num_val
         return node
 
-    def parse_file(self, filename) -> list[ASTNode]:
+    def parse_file(self, filename) -> ASTNode|None:
         self.lexer = Lexer(filename)
         return self.parse_program()
 
-    def parse_program(self) -> list[ASTNode]:
+    def parse_program(self) -> ASTNode|None:
         if self.lexer is None:
             fatal("Lexer is not initialized")
         self.lexer.reset()
         self.next_token()
         return self.function_declarations()
 
+    def add_node(self, node: ASTNode|None):
+        if node is None:
+            return
+        self.leaves.append(node)
+        # dump_ast(sys.stdout, node)
+
     def next_token(self) -> Token:
-        if self.peek is not None:
-            self.curr, self.peek = self.peek, None
-        else:
-            self.curr = self.lexer.scan_next()
+        self.curr = self.lexer.scan_next()
         return self.curr
 
-    def peek_is(self, token_type: TokenType) -> bool:
-        self.peek = self.lexer.scan_next()
-        if self.peek.token == TokenType.T_EOF:
-            self.peek = self.lexer.scan_next()
-        return self.peek == token_type
-
-    def match(self, token_type: TokenType, get_next: bool = True) -> bool:
-        ok = (self.curr.token == token_type)
-        if not ok:
-            fatal(f"Unexpected token {self.curr.token}, expected {token_type}")
-        if get_next:
+    def match_type(self, token_type: TokenType, throw: bool = True) -> bool:
+        if self.curr.token == token_type:
             self.next_token()
-        return ok
+            return True
+        if throw:
+            fatal(f"Unexpected token {self.curr.token}, expected {token_type}")
+        return False
 
-    def semi(self) -> None:
-        self.match(TokenType.T_SEMI)
+    def semi(self, throw: bool = True) -> bool:
+        return self.match_type(TokenType.T_SEMI, throw)
 
-    def lbrace(self) -> None:
-        self.match(TokenType.T_LBRACE)
+    def lbrace(self) -> bool:
+        return self.match_type(TokenType.T_LBRACE)
 
-    def rbrace(self) -> None:
-        self.match(TokenType.T_RBRACE)
+    def rbrace(self, throw: bool = True) -> bool:
+        return self.match_type(TokenType.T_RBRACE, throw)
 
-    def lparen(self) -> None:
-        self.match(TokenType.T_LPAREN)
+    def lparen(self) -> bool:
+        return self.match_type(TokenType.T_LPAREN)
 
-    def rparen(self) -> None:
-        self.match(TokenType.T_RPAREN)
+    def rparen(self, throw: bool = True) -> bool:
+        return self.match_type(TokenType.T_RPAREN, throw)
 
-    def comma(self) -> None:
-        self.match(TokenType.T_COMMA)
+    def comma(self, throw: bool = True) -> bool:
+        return self.match_type(TokenType.T_COMMA, throw)
 
-    def function_declarations(self) -> list[ASTNode]:
+    def is_eof(self) -> bool:
+        return self.match_type(TokenType.T_EOF, False)
+
+    def function_declarations(self) -> ASTNode|None:
         """
         function_declarations= function_declaration*
         """
-        nodes = []
-        while self.curr.token != TokenType.T_EOF:
-            ast = self.function_declaration()
-            nodes.append(ast)
-        return nodes
+        node = None
+        while not self.is_eof():
+            node = self.function_declaration()
+            self.add_node(node)
+        return node
 
     def function_declaration(self) -> ASTNode:
         """
@@ -95,28 +98,27 @@ class Parser:
                             | function_prototype SEMI
         """
         func = self.function_prototype()
-        if self.curr.token == TokenType.T_SEMI:
+        if self.semi(False):
             self.add_function(func, func.left)
-            self.semi()
             return func
         self.declare_function(func)
-        s = self.statement_block()
-        self.gen_func_statement_block(s)
-        return s
+        node = self.statement_block()
+        self.gen_func_statement_block(node)
+        self.add_node(node)
+        return node
 
     def function_prototype(self) -> ASTNode:
         """
         function_prototype= typed_declaration LPAREN typed_declaration_list RPAREN
                           | typed_declaration LPAREN VOID RPAREN
         """
-        func = self.typed_declaration()
+        node = self.typed_declaration()
         self.lparen()
-        if self.match(TokenType.T_VOID, False):
-            self.next_token()
-        else:
-            func.left = self.typed_declaration_list()
+        if not self.match_type(TokenType.T_VOID, False):
+            node.left = self.typed_declaration_list()
         self.rparen()
-        return func
+        self.add_node(node)
+        return node
 
     def typed_declaration_list(self) -> ASTNode:
         """
@@ -124,9 +126,7 @@ class Parser:
         """
         root = self.typed_declaration()
         node = root
-        self.next_token()
-        while self.curr.token == TokenType.T_COMMA:
-            self.comma()
+        while self.comma(False):
             next_node = self.typed_declaration()
             node.mid = next_node
             node = next_node
@@ -137,7 +137,71 @@ class Parser:
         typed_declaration= type IDENT
         """
         type_obj = self.get_type()
-        return self.get_id(type_obj)
+        node = self.get_id(type_obj)
+        self.add_node(node)
+        return node
+
+    def declaration_stmts(self) -> ASTNode:
+        """
+        declaration_stmts= (typed_declaration ASSIGN expression SEMI)+
+        """
+        node, last = None, None
+        while self.is_type_token(self.curr.token):
+            decl = self.typed_declaration()
+            if self.match_type(TokenType.T_ASSIGN, False):
+                expr = self.expression()
+                decl = self.declaration_statement(decl, expr)
+            self.semi()
+            if not node:
+                node = decl
+            else:
+                last.right = decl
+            last = decl
+        self.add_node(node)
+        return node
+
+    def procedural_stmts(self) -> ASTNode:
+        """
+        procedural_stmts= procedural_stmt*
+        """
+        node, last = None, None
+        while self.curr.token not in (TokenType.T_RBRACE, TokenType.T_EOF):
+            stmt = self.procedural_stmt()
+            if not node:
+                node = stmt
+            else:
+                last.right = stmt
+            last = stmt
+        self.add_node(node)
+        return node
+
+    def procedural_stmt(self) -> ASTNode | None:
+        """
+        解析单个过程语句，可能返回None
+        procedural_stmt= ( print_stmt
+                         | assign_stmt
+                         | if_stmt
+                         | while_stmt
+                         | for_stmt
+                         | function_call
+                         )
+        """
+        if self.curr.token == TokenType.T_RBRACE:
+            return None
+        if self.curr.token == TokenType.T_PRINTF:
+            return self.printf_statement()
+        elif self.curr.token == TokenType.T_IF:
+            return self.if_stmt()
+        elif self.curr.token == TokenType.T_WHILE:
+            return self.while_stmt()
+        elif self.curr.token == TokenType.T_FOR:
+            return self.for_stmt()
+        elif self.curr.token == TokenType.T_IDENT:
+            if self.match_type(TokenType.T_LPAREN, False):
+                return self.function_call()
+            else:
+                return self.assign_stmt()
+        return fatal(f"Unexpected token {self.curr.token} in procedural statement")
 
     def get_type(self) -> DataType:
         """
@@ -160,12 +224,12 @@ class Parser:
         if self.curr.token not in type_map:
             fatal(f"Unknown type {self.curr.token}")
         type_obj = type_map[self.curr.token]
-        self.match(self.curr.token)
+        self.next_token()
         return type_obj
 
     def get_id(self, type_obj: DataType) -> ASTNode:
         id_str = self.curr.tok_str
-        self.match(TokenType.T_IDENT)
+        self.match_type(TokenType.T_IDENT)
         identifier = ASTNode(ASTNodeType.A_IDENT)
         identifier.strlit = id_str
         identifier.type = type_obj
@@ -177,8 +241,7 @@ class Parser:
                        | LBRACE declaration_stmt* procedural_stmt* RBRACE
         """
         self.lbrace()
-        if self.curr.token == TokenType.T_RBRACE:
-            self.rbrace()
+        if self.rbrace(False):
             return None
         d = self.declaration_stmts()
         s = self.procedural_stmts()
@@ -186,26 +249,30 @@ class Parser:
             d.right = s
             return d
         self.rbrace()
-        return d or s
+        node = d or s
+        self.add_node(node)
+        return node
 
     def print_statement(self) -> ASTNode:
-        self.match(TokenType.T_PRINTF)
+        self.match_type(TokenType.T_PRINTF)
         self.lparen()
         expr = self.expression()
         self.rparen()
         self.semi()
         node = ASTNode(ASTNodeType.A_PRINTF)
         node.left = expr
+        self.add_node(node)
         return node
 
     def printf_statement(self) -> ASTNode:
-        self.match(TokenType.T_PRINTF)
+        self.match_type(TokenType.T_PRINTF)
         self.lparen()
         args = self.expression_list()
         self.rparen()
         self.semi()
         node = ASTNode(ASTNodeType.A_PRINTF)
         node.right = args
+        self.add_node(node)
         return node
 
     def assign_stmt(self) -> ASTNode:
@@ -213,98 +280,39 @@ class Parser:
         assign_stmt= variable ASSIGN expression SEMI
         """
         left = self.expression()
-        self.match(TokenType.T_ASSIGN)
+        self.match_type(TokenType.T_ASSIGN)
         right = self.expression()
         node = ASTNode(ASTNodeType.A_ASSIGN)
         node.left = left
         node.right = right
+        self.add_node(node)
         return node
-
-    def declaration_stmts(self) -> ASTNode:
-        """
-        declaration_stmts= (typed_declaration ASSIGN expression SEMI)+
-        """
-        first, last = None, None
-        while self.is_type_token(self.curr.token):
-            decl = self.typed_declaration()
-            if self.curr.token == TokenType.T_ASSIGN:
-                self.match(TokenType.T_ASSIGN)
-                expr = self.expression()
-                decl = self.declaration_statement(decl, expr)
-            self.semi()
-            if not first:
-                first = decl
-            else:
-                last.right = decl
-            last = decl
-        return first
-
-    def procedural_stmts(self) -> ASTNode:
-        """
-        procedural_stmt= ( print_stmt
-                         | assign_stmt
-                         | if_stmt
-                         | while_stmt
-                         | for_stmt
-                         | function_call
-                         )*
-        """
-        first, last = None, None
-        while self.curr.token not in (TokenType.T_RBRACE, TokenType.T_EOF):
-            stmt = self.procedural_stmt()
-            if not first:
-                first = stmt
-            else:
-                last.right = stmt
-            last = stmt
-        return first
-
-    def procedural_stmt(self) -> ASTNode | None:
-        """
-        解析单个过程语句，可能返回None
-        """
-        if self.curr.token == TokenType.T_RBRACE:
-            return None
-        if self.curr.token == TokenType.T_PRINTF:
-            return self.printf_statement()
-        elif self.curr.token == TokenType.T_IF:
-            return self.if_stmt()
-        elif self.curr.token == TokenType.T_WHILE:
-            return self.while_stmt()
-        elif self.curr.token == TokenType.T_FOR:
-            return self.for_stmt()
-        elif self.curr.token == TokenType.T_IDENT:
-            if self.peek_is(TokenType.T_LPAREN):
-                return self.function_call()
-            else:
-                return self.assign_stmt()
-        return fatal(f"Unexpected token {self.curr.token} in procedural statement")
 
     def if_stmt(self) -> ASTNode:
         """
         if_stmt= IF LPAREN relational_expression RPAREN statement_block
                  (ELSE statement_block)?
         """
-        self.match(TokenType.T_IF)
+        self.match_type(TokenType.T_IF)
         self.lparen()
         cond = self.expression()
         self.rparen()
         then_stmt = self.statement_block()
         else_stmt = None
-        if self.curr.token == TokenType.T_ELSE:
-            self.match(TokenType.T_ELSE)
+        if self.match_type(TokenType.T_ELSE, False):
             else_stmt = self.statement_block()
         node = ASTNode(ASTNodeType.A_IF)
         node.left = cond
         node.mid = then_stmt
         node.right = else_stmt
+        self.add_node(node)
         return node
 
     def while_stmt(self) -> ASTNode:
         """
         while_stmt= WHILE LPAREN relational_expression RPAREN statement_block
         """
-        self.match(TokenType.T_WHILE)
+        self.match_type(TokenType.T_WHILE)
         self.lparen()
         cond = self.expression()
         self.rparen()
@@ -312,6 +320,7 @@ class Parser:
         node = ASTNode(ASTNodeType.A_WHILE)
         node.left = cond
         node.mid = body
+        self.add_node(node)
         return node
 
     def for_stmt(self) -> ASTNode:
@@ -319,22 +328,17 @@ class Parser:
         for_stmt= FOR LPAREN assign_stmt relational_expression SEMI
                   short_assign_stmt RPAREN statement_block
         """
-        self.match(TokenType.T_FOR)
+        self.match_type(TokenType.T_FOR)
         self.lparen()
-        init = self.expression() if self.curr.token != TokenType.T_SEMI else None
-        if self.curr.token == TokenType.T_SEMI:
-            self.semi()
-        cond = self.expression() if self.curr.token != TokenType.T_SEMI else None
-        if self.curr.token == TokenType.T_SEMI:
-            self.semi()
-        incr = self.expression() if self.curr.token != TokenType.T_RPAREN else None
-        self.rparen()
+        init = None if self.semi(False) else self.expression()
+        cond = None if self.semi(False) else self.expression()
+        incr = None if self.rparen(False) else self.expression()
         body = self.statement_block()
         node = ASTNode(ASTNodeType.A_FOR)
-        node.left = init
+        node.left, node.right = init, incr
         node.mid = cond
-        node.right = incr
         node.mid.right = body
+        self.add_node(node)
         return node
 
     def function_call(self) -> ASTNode:
@@ -342,13 +346,14 @@ class Parser:
         function_call= IDENT LPAREN expression_list? RPAREN SEMI
         """
         func_name = self.curr.tok_str
-        self.match(TokenType.T_IDENT)
+        self.match_type(TokenType.T_IDENT)
         self.lparen()
-        args = self.expression_list() if self.curr.token != TokenType.T_RPAREN else None
+        args = None if self.rparen(False) else self.expression_list()
         self.rparen()
         node = ASTNode(ASTNodeType.A_FUNCCALL)
         node.strlit = func_name
         node.right = args
+        self.add_node(node)
         return node
 
     def expression_list(self) -> ASTNode:
@@ -357,8 +362,7 @@ class Parser:
         """
         root = self.expression()
         node = root
-        while self.curr.token == TokenType.T_COMMA:
-            self.comma()
+        while self.comma(False):
             next_arg = self.expression()
             node.mid = next_arg
             node = next_arg
@@ -368,7 +372,9 @@ class Parser:
         """
         expression= bitwise_expression
         """
-        return self.bitwise_expression()
+        node = self.bitwise_expression()
+        self.add_node(node)
+        return node
 
     def bitwise_expression(self) -> ASTNode:
         """
@@ -383,7 +389,7 @@ class Parser:
         left = self.relational_expression()
         while self.curr.token in (TokenType.T_AMPER, TokenType.T_OR, TokenType.T_XOR):
             op = self.map_token_to_ast_op(self.curr.token)
-            self.match(self.curr.token)
+            self.next_token()
             right = self.relational_expression()
             left = ExprProcessor.binop(left, op, right)
         return left
@@ -405,7 +411,7 @@ class Parser:
         while self.curr.token in (TokenType.T_EQ, TokenType.T_NE, TokenType.T_LT, TokenType.T_GT, TokenType.T_LE,
                                   TokenType.T_GE):
             op = self.map_token_to_ast_op(self.curr.token)
-            self.match(self.curr.token)
+            self.next_token()
             right = self.shift_expression()
             left = ExprProcessor.binop(left, op, right)
         return left
@@ -420,7 +426,7 @@ class Parser:
         left = self.additive_expression()
         while self.curr.token in (TokenType.T_LSHIFT, TokenType.T_RSHIFT):
             op = self.map_token_to_ast_op(self.curr.token)
-            self.match(self.curr.token)
+            self.next_token()
             right = self.additive_expression()
             left = ExprProcessor.binop(left, op, right)
         return left
@@ -437,7 +443,7 @@ class Parser:
         left = self.multiplicative_expression()
         while self.curr.token in (TokenType.T_PLUS, TokenType.T_MINUS):
             op = self.map_token_to_ast_op(self.curr.token)
-            self.match(self.curr.token)
+            self.next_token()
             right = self.multiplicative_expression()
             left = ExprProcessor.binop(left, op, right)
         return left
@@ -461,7 +467,7 @@ class Parser:
         left = self.factor()
         while self.curr.token in (TokenType.T_STAR, TokenType.T_SLASH, TokenType.T_MOD):
             op = self.map_token_to_ast_op(self.curr.token)
-            self.match(self.curr.token)
+            self.next_token()
             right = self.factor()
             left = ExprProcessor.binop(left, op, right)
         return left
@@ -480,28 +486,28 @@ class Parser:
             self.rparen()
             return expr
         elif token == TokenType.T_IDENT:
-            if self.peek_is(TokenType.T_LPAREN):
+            if self.match_type(TokenType.T_LPAREN, False):
                 return self.function_call()
             else:
                 return self.variable()
         elif token == TokenType.T_NUMLIT:
             node = self.gen_number_node(self.curr)
-            self.match(token)
+            self.match_type(token)
             return node
         elif token == TokenType.T_STRLIT:
             node = ASTNode(ASTNodeType.A_STRLIT)
             node.strlit = self.curr.tok_str
-            self.match(token)
+            self.match_type(token)
             return node
         elif token == TokenType.T_TRUE or token == TokenType.T_FALSE:
             node = ASTNode(ASTNodeType.A_NUMLIT)
             node.numlit.intval = 1 if token == TokenType.T_TRUE else 0
             node.type = ty_bool
-            self.match(token)
+            self.match_type(token)
             return node
         elif token in (TokenType.T_MINUS, TokenType.T_PLUS, TokenType.T_LOGNOT, TokenType.T_INVERT):
             op = self.map_token_to_ast_op(token)
-            self.match(token)
+            self.match_type(token)
             child = self.factor()
             node = ASTNode(op)
             node.left = child
@@ -513,13 +519,14 @@ class Parser:
         variable= IDENT
         """
         name = self.curr.tok_str
-        self.match(TokenType.T_IDENT)
+        self.match_type(TokenType.T_IDENT)
         node = ASTNode(ASTNodeType.A_IDENT)
         node.strlit = name
         node.sym = self.find_symbol(name)
         if not node.sym:
             fatal(f"Unknown variable {name}")
         node.type = node.sym.type
+        self.add_node(node)
         return node
 
     def is_type_token(self, token: TokenType) -> bool:
