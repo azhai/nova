@@ -18,7 +18,7 @@ class ASTCodeGenerator:
 
         # 根据节点类型生成相应的代码
         if node.op == ASTNodeType.A_NUMLIT:
-            return cgloadlit(node.numlit.intval, node.type)
+            return cgloadlit(node.numlit, node.type)
         elif node.op == ASTNodeType.A_IDENT:
             return cgloadvar(node.sym)
         elif node.op == ASTNodeType.A_ASSIGN:
@@ -92,17 +92,18 @@ class ASTCodeGenerator:
             cgjump(label_start)
             cglabel(label_end)
             return 0
-        elif node.op == ASTNodeType.A_PRINT:
-            expr_temp = cls.gen_ast(node.left)
+        elif node.op in (ASTNodeType.A_PRINT, ASTNodeType.A_PRINTF):
+            expr_temp = cls.gen_ast(node.right)
             # 根据类型选择合适的格式字符串
-            from strlits import get_strlit_label
-            if is_integer(node.left.type):
-                label = get_strlit_label("%d\n")
-            elif is_float(node.left.type):
-                label = get_strlit_label("%f\n")
-            else:
-                fatal(f"Unsupported type for print: {node.left.type}")
-            cgprint(label, expr_temp, node.left.type)
+            from strlits import add_strlit, get_strlit_label
+            # if is_integer(node.left.type):
+            #     label = get_strlit_label("%d\n")
+            # elif is_float(node.left.type):
+            #     label = get_strlit_label("%f\n")
+            # else:
+            #     fatal(f"Unsupported type for print: {node.left.type}")
+            label = get_strlit_label(node.left.strlit)
+            cgprint(label, expr_temp, node.right.type)
             return 0
         elif node.op == ASTNodeType.A_LOCAL:
             cgaddlocal(node.type, node.sym)

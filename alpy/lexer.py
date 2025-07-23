@@ -26,8 +26,9 @@ Keywords = {
 
 
 class Lexer:
-    LineNo, AtBegin = 1, False
-    InComment, MulComment = False, False
+    line_no, at_begin = 1, False
+    # 单行注释%%和多行注释<%%>
+    in_comment, mul_comment = False, False
 
     def __init__(self, filename: str):
         self.filename = filename
@@ -88,12 +89,11 @@ class Lexer:
             return '\0'
         c = self.source[self.pos]
         if c == '\n':
-            self.LineNo += 1
-            self.AtBegin = True
-            self.InComment = False
+            self.line_no += 1
+            self.at_begin = True
+            self.in_comment = False
             return self.next_char(True)
-        # 跳过注释和空白
-        while self.InComment or ignore_space and c.isspace():
+        while self.in_comment or ignore_space and c.isspace():
             c = self.next_char(True)
         return c
 
@@ -104,8 +104,8 @@ class Lexer:
         self.reset()
         out.write("\nTokens in {}".format(self.filename))
         for token in self.scan_all():
-            if self.LineNo > line:
-                line = self.LineNo
+            if self.line_no > line:
+                line = self.line_no
                 out.write("\n{}: ".format(line))
             out.write("{} ".format(token))
         out.write("\n")
@@ -114,14 +114,20 @@ class Lexer:
         c = self.next_char(True)
         if c == '\0':  # EOF
             return Token(TokenType.T_EOF)
+        while self.mul_comment:
+            c = self.next_char(True)
+            if self.scan_comment(c):
+                c = self.next_char(True)
+        # 寻找Token
         if c.isalpha() or c == '_':
             return self.scan_keyword(c)
         elif c == '"' or c == '\'' or c == '\\':
             return self.scan_string(c)
         elif c.isdigit() or c == '.':
             return self.scan_number(c)
-        else:
+        elif not self.scan_comment(c):
             return self.scan_symbol(c)
+        return self.scan_next()
 
     def scan_all(self):
         token = self.scan_next()
@@ -129,6 +135,27 @@ class Lexer:
             yield token
             token = self.scan_next()
         yield token
+
+    def scan_comment(self, c: str) -> bool:
+        c2 = ''
+        if self.mul_comment and c == '%':
+            c2 = self.next_char(False)
+            if c2 == '>':
+                self.mul_comment = False
+                return True
+        if not self.mul_comment and c == '<':
+            c2 = self.next_char(False)
+            if c2 == '%':
+                self.mul_comment = True
+                return True
+        if not self.mul_comment and c == '%':
+            c2 = self.next_char(False)
+            if c2 == '%':
+                self.in_comment = True
+                return True
+        if c2 != '':
+            self.back_pos()
+        return False
 
     def scan_keyword(self, c: str) -> Token:
         i, buf = 0, []

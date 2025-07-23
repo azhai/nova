@@ -4,6 +4,7 @@ from enum import IntEnum
 from typing import Optional
 
 # Global variables
+NOREG = -1
 OutFile: Optional[object] = None
 DebugFile: Optional[object] = None
 
@@ -23,7 +24,7 @@ def slash_char(c: str) -> str:
     if c == 'r': return '\r'
     if c == 't': return '\t'
     if c == 'v': return '\v'
-    if c in ['"', '\'', '\\']: return c
+    if c in ['%', '"', '\'', '\\']: return c
     return ''
 
 
@@ -176,7 +177,7 @@ class DataType:
         self.size = size
         self.align = align
         self.is_unsigned = is_unsigned
-        self.next: Optional[DataType] = None
+        self.sibling: Optional[DataType] = None
 
 
 class NumType(IntEnum):
@@ -193,10 +194,11 @@ class Litval:
 
 
 class Strlit:
-    def __init__(self, val: str, label: int):
+    def __init__(self, val: str, label: int,
+                 sibling: Optional['Strlit'] = None):
         self.val = val
         self.label = label
-        self.next: Optional[Strlit] = None
+        self.sibling = sibling
 
 
 class SymType(IntEnum):
@@ -216,9 +218,10 @@ class Sym:
         self.has_addr: bool = False
         self.type: DataType = val_type
         self.init_val: Litval = Litval()
+        self.params = []
         # self.count: int = 0
         # self.memb: Optional[Sym] = None
-        # self.next: Optional[Sym] = None
+        # self.sibling: Optional[Sym] = None
 
 
 class ASTNodeType(IntEnum):

@@ -1,6 +1,7 @@
 // astnodes.c
 #ifdef __APPLE__
-    #define uint uint32_t
+    #define uint unsigned int
+    #define uint64_t unsigned long
 #endif
 
 ASTnode *mkastnode(int op, ASTnode *left, ASTnode *mid, ASTnode *right);

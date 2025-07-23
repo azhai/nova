@@ -80,7 +80,7 @@ void dumpAST(ASTnode * n, int level) {
     if (n->type->kind >= TY_FLT32)
       fprintf(Debugfh, "%f", n->litval.dblval);
     else
-      fprintf(Debugfh, LONG_FORMAT, n->litval.intval);
+      fprintf(Debugfh, "%" PRId64, n->litval.intval);
     break;
   case A_ASSIGN:
     fprintf(Debugfh, "%s = ", n->sym->name);

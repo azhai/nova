@@ -1,19 +1,19 @@
-import sys
-from alpy.astnodes import dump_ast
+from typing import List
 from defs import (
-    ASTNode, ASTNodeType, DataType, Litval, Sym, TokenType, Token,
+    ASTNode, ASTNodeType, DataType, TypeKind, TokenType, Token, Litval, SymType, Sym,
     fatal, ty_void, ty_bool, ty_int8, ty_int16, ty_int32, ty_int64,
     ty_uint8, ty_uint16, ty_uint32, ty_uint64, ty_flt32, ty_flt64
 )
 from lexer import Lexer
+from typs import TypeProcessor
 from expr import ExprProcessor
 from funcs import FuncProcessor
 from stmts import gen_stat_declare
-from syms import SymProcessor
+from syms import root
 
 
 class Parser:
-    finder = SymProcessor()
+    table = root
     leaves = []
 
     def __init__(self, lexer: Lexer = None):
@@ -97,40 +97,41 @@ class Parser:
         function_declaration= function_prototype statement_block
                             | function_prototype SEMI
         """
-        func = self.function_prototype()
+        node, params = self.function_prototype()
         if self.semi(False):
-            self.add_function(func, func.left)
-            return func
-        self.declare_function(func)
-        node = self.statement_block()
+            self.add_function(node, params)
+            return node
+        node.left = self.statement_block()
+        self.declare_function(node, params)
         self.gen_func_statement_block(node)
         self.add_node(node)
         return node
 
-    def function_prototype(self) -> ASTNode:
+    def function_prototype(self) -> (ASTNode, List[Sym]):
         """
         function_prototype= typed_declaration LPAREN typed_declaration_list RPAREN
                           | typed_declaration LPAREN VOID RPAREN
         """
-        node = self.typed_declaration()
+        node, params = self.typed_declaration(), []
         self.lparen()
         if not self.match_type(TokenType.T_VOID, False):
-            node.left = self.typed_declaration_list()
+            node.left, params = self.typed_declaration_list()
         self.rparen()
         self.add_node(node)
-        return node
+        return node, params
 
-    def typed_declaration_list(self) -> ASTNode:
+    def typed_declaration_list(self) -> (ASTNode, List[Sym]):
         """
         typed_declaration_list= typed_declaration (COMMA typed_declaration_list)*
         """
         root = self.typed_declaration()
-        node = root
+        node, sym_list = root, [root.sym, ]
         while self.comma(False):
             next_node = self.typed_declaration()
+            sym_list.append(next_node.sym)
             node.mid = next_node
             node = next_node
-        return root
+        return root, sym_list
 
     def typed_declaration(self) -> ASTNode:
         """
@@ -165,13 +166,23 @@ class Parser:
         procedural_stmts= procedural_stmt*
         """
         node, last = None, None
-        while self.curr.token not in (TokenType.T_RBRACE, TokenType.T_EOF):
-            stmt = self.procedural_stmt()
+        while 1:
+            last = self.procedural_stmt()
+            if not last:
+                break
             if not node:
-                node = stmt
+                node = last
             else:
-                last.right = stmt
-            last = stmt
+                node = ASTNode(ASTNodeType.A_GLUE, left=node, right=last)
+
+        # while self.curr.token not in (TokenType.T_RBRACE, TokenType.T_EOF):
+        #     stmt = self.procedural_stmt()
+        #     if not node:
+        #         node = stmt
+        #     else:
+        #         last.right = stmt
+        #     last = stmt
+
         self.add_node(node)
         return node
 
@@ -189,7 +200,7 @@ class Parser:
         if self.curr.token == TokenType.T_RBRACE:
             return None
         if self.curr.token == TokenType.T_PRINTF:
-            return self.printf_statement()
+            return self.print_statement()
         elif self.curr.token == TokenType.T_IF:
             return self.if_stmt()
         elif self.curr.token == TokenType.T_WHILE:
@@ -233,6 +244,11 @@ class Parser:
         identifier = ASTNode(ASTNodeType.A_IDENT)
         identifier.strlit = id_str
         identifier.type = type_obj
+        identifier.sym = Sym(
+            name=id_str,
+            sym_type=SymType.SYM_LOCAL,
+            val_type=type_obj
+        )
         return identifier
 
     def statement_block(self) -> ASTNode | None:
@@ -243,35 +259,29 @@ class Parser:
         self.lbrace()
         if self.rbrace(False):
             return None
-        d = self.declaration_stmts()
-        s = self.procedural_stmts()
-        if d and s:
-            d.right = s
-            return d
+        node = self.declaration_stmts()
+        proc = self.procedural_stmts()
+        if node is None:
+            node = proc
+        else:
+            node.right = proc
         self.rbrace()
-        node = d or s
         self.add_node(node)
         return node
 
     def print_statement(self) -> ASTNode:
         self.match_type(TokenType.T_PRINTF)
         self.lparen()
-        expr = self.expression()
+        left = self.factor()
+        assert left.op == ASTNodeType.A_STRLIT
+        self.comma()
+        right = self.expression()
         self.rparen()
         self.semi()
         node = ASTNode(ASTNodeType.A_PRINTF)
-        node.left = expr
-        self.add_node(node)
-        return node
-
-    def printf_statement(self) -> ASTNode:
-        self.match_type(TokenType.T_PRINTF)
-        self.lparen()
-        args = self.expression_list()
-        self.rparen()
-        self.semi()
-        node = ASTNode(ASTNodeType.A_PRINTF)
-        node.right = args
+        if right.type.kind == TypeKind.TY_FLT32:
+            right = TypeProcessor.widen_expression(right)
+        node.left, node.right = left, right
         self.add_node(node)
         return node
 
@@ -522,7 +532,7 @@ class Parser:
         self.match_type(TokenType.T_IDENT)
         node = ASTNode(ASTNodeType.A_IDENT)
         node.strlit = name
-        node.sym = self.find_symbol(name)
+        node.sym = self.table.find_symbol(name)
         if not node.sym:
             fatal(f"Unknown variable {name}")
         node.type = node.sym.type
@@ -560,20 +570,19 @@ class Parser:
         return op_map.get(token, ASTNodeType.A_ADD)
 
     # Placeholder methods that need implementation from other modules
-    def add_function(self, func: ASTNode, paramlist: ASTNode) -> None:
-        # FuncProcessor.add_function(func.sym.name, func.type, [])
+    def add_function(self, func: ASTNode, params: List[Sym]) -> None:
+        FuncProcessor.add_function(func.strlit, func.type, params)
         return
 
-    def declare_function(self, func: ASTNode, body: ASTNode = None) -> None:
-        # FuncProcessor.declare_function(func.sym.name, func.type, [], body)
+    def declare_function(self, func: ASTNode, params: List[Sym]) -> None:
+        FuncProcessor.declare_function(func.strlit, func.type, params, func.left)
+        self.table = self.table.new_scope(func)
         return
 
-    def gen_func_statement_block(self, s: ASTNode) -> None:
-        # FuncProcessor.gen_func_statement_block(s.sym, s)
+    def gen_func_statement_block(self, func: ASTNode) -> None:
+        FuncProcessor.gen_func_statement_block(func.sym, func.left)
+        self.table = self.table.end_scope()
         return
 
     def declaration_statement(self, ident: ASTNode, expr: ASTNode) -> ASTNode:
         return gen_stat_declare(ident, expr)
-
-    def find_symbol(self, name: str) -> Sym:
-        return self.finder.find_symbol(name)

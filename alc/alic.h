@@ -2,6 +2,7 @@
 // (c) 2025 Warren Toomey, GPL3
 
 #include <stdint.h>
+#include <inttypes.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -10,12 +11,6 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <limits.h>
-
-#ifdef __APPLE__
-    #define LONG_FORMAT "%lld"
-#else
-    #define LONG_FORMAT "%ld"
-#endif
 
 // Built-in type ids.
 typedef enum {

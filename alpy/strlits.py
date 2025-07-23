@@ -20,7 +20,7 @@ class StrLitProcessor:
         self.strlit_dict[value] = label
 
         # 添加到字符串字面量列表
-        new_strlit = Strlit(val=value, label=label, next=self.strlit_list)
+        new_strlit = Strlit(val=value, label=label, sibling=self.strlit_list)
         self.strlit_list = new_strlit
 
         return label
@@ -36,7 +36,7 @@ class StrLitProcessor:
             escaped = escaped.replace('\\', '\\\\').replace('"', '\\"')
             # 生成数据定义
             print(f"data $L{strlit.label} = {{ b \"{escaped}\", b 0 }}", file=OutFile)
-            strlit = strlit.next
+            strlit = strlit.sibling
 
     def get_strlit_label(self, value: str) -> int:
         """获取字符串字面量的标签，如果不存在则添加"""

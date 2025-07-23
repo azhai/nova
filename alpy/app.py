@@ -23,9 +23,9 @@
 
 import argparse
 import sys
-from defs import init_global_vars, close_all_files
 from astnodes import dump_ast
 from cgen import cg_file_preamble, cg_file_postamble
+from defs import init_global_vars, close_all_files, ASTNode
 from lexer import Lexer
 from parser import Parser
 from strlits import gen_strlits
@@ -47,28 +47,29 @@ def main():
     # 生成代码
     print("Generating code...", file=sys.stderr)
     cg_file_preamble()
-    parse_program(input_file)
-    # gen_glob_syms()
-    gen_strlits()
-    # gen_func_statement_block(None, ast)
+    ast = parse_program(input_file)
+    print("\nAST nodes:")
+    dump_ast(None, ast)
     cg_file_postamble()
 
     # 清理
     close_all_files(output_file)
 
 
-def parse_program(filename: str):
+def parse_program(filename: str) -> ASTNode|None:
     lexer = Lexer(filename)
     lexer.dump_tokens()
+    print("")
+
     parser = Parser(lexer)
     ast = parser.parse_program()
-    print("\nAST nodes:")
-    dump_ast(None, ast)
-    # gen_ast(ast)
+    gen_strlits()
+    gen_glob_syms()
+
     # 添加类型信息
     # print("Adding type information...", file=sys.stderr)
     # add_type(ast)
-    return
+    return ast
 
 
 if __name__ == '__main__':

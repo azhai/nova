@@ -149,7 +149,6 @@ void cgglobsym(Sym * s) {
   if (s == NULL) return;
 
   // Get the matching QBE type
-  char buffer[30];
   char *qtype = qbe_storetype(s->type);
 
   switch (s->type->kind) {
@@ -159,9 +158,8 @@ void cgglobsym(Sym * s) {
 	    s->name, qtype, qtype, s->initval.dblval);
     break;
   default:
-    sprintf(buffer, LONG_FORMAT, s->initval.intval);
-    fprintf(Outfh, "export data $%s = { %s %s, }\n",
-	    s->name, qtype, buffer);
+    fprintf(Outfh, "export data $%s = { %s %" PRId64 ", }\n",
+	    s->name, qtype, s->initval.intval);
   }
 }
 
@@ -181,7 +179,6 @@ int cgloadlit(Litval value, Type * type) {
   int t = cgalloctemp();
 
   // Get the matching QBE type
-  char buffer[30];
   char *qtype = qbetype(type);
 
   switch (type->kind) {
@@ -191,8 +188,7 @@ int cgloadlit(Litval value, Type * type) {
 	    value.dblval);
     break;
   default:
-    sprintf(buffer, LONG_FORMAT, value.intval);
-    fprintf(Outfh, "  %%.t%d =%s copy %s\n", t, qtype, buffer);
+    fprintf(Outfh, "  %%.t%d =%s copy %" PRId64 "\n", t, qtype, value.intval);
   }
   return (t);
 }

@@ -129,8 +129,13 @@ def gen_stat_declare(ident: ASTNode, expr: ASTNode) -> ASTNode:
     """ 创建声明语句AST节点 """
     expr = cast_node(expr, ident.type)
     # 添加到符号表
-    sym = add_symbol(ident.strlit, SymType.SYM_VAR, ident.type)
+    sym = Sym(
+        name=ident.strlit,
+        sym_type=SymType.SYM_VAR,
+        val_type=ident.type
+    )
     sym.has_addr = True
+    add_symbol(sym)
     # 改造ident
     ident.sym = sym
     ident.left = expr
