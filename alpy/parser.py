@@ -1,15 +1,16 @@
 from typing import List
+
 from defs import (
     ASTNode, ASTNodeType, DataType, TypeKind, TokenType, Token, Litval, SymType, Sym,
     fatal, ty_void, ty_bool, ty_int8, ty_int16, ty_int32, ty_int64,
     ty_uint8, ty_uint16, ty_uint32, ty_uint64, ty_flt32, ty_flt64
 )
-from lexer import Lexer
-from typs import TypeProcessor
 from expr import ExprProcessor
 from funcs import FuncProcessor
+from lexer import Lexer
 from stmts import gen_stat_declare
 from syms import root
+from typs import TypeProcessor
 
 
 class Parser:
@@ -32,18 +33,18 @@ class Parser:
             node.numlit.intval = token.num_val
         return node
 
-    def parse_file(self, filename) -> ASTNode|None:
+    def parse_file(self, filename) -> ASTNode | None:
         self.lexer = Lexer(filename)
         return self.parse_program()
 
-    def parse_program(self) -> ASTNode|None:
+    def parse_program(self) -> ASTNode | None:
         if self.lexer is None:
             fatal("Lexer is not initialized")
         self.lexer.reset()
         self.next_token()
         return self.function_declarations()
 
-    def add_node(self, node: ASTNode|None):
+    def add_node(self, node: ASTNode | None):
         if node is None:
             return
         self.leaves.append(node)
@@ -82,7 +83,7 @@ class Parser:
     def is_eof(self) -> bool:
         return self.match_type(TokenType.T_EOF, False)
 
-    def function_declarations(self) -> ASTNode|None:
+    def function_declarations(self) -> ASTNode | None:
         """
         function_declarations= function_declaration*
         """

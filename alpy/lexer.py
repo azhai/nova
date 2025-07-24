@@ -1,4 +1,5 @@
 import sys
+
 from defs import TokenType, NumType, Token, fatal, read_file, slash_char
 
 TextLen = 512
@@ -27,7 +28,7 @@ Keywords = {
 
 class Lexer:
     line_no, at_begin = 1, False
-    # 单行注释%%和多行注释<%%>
+    # 单行注释%%和跨行文本注释(%%)
     in_comment, mul_comment = False, False
 
     def __init__(self, filename: str):
@@ -102,7 +103,6 @@ class Lexer:
             out = sys.stdout
         line = 0
         self.reset()
-        out.write("\nTokens in {}".format(self.filename))
         for token in self.scan_all():
             if self.line_no > line:
                 line = self.line_no
@@ -121,10 +121,10 @@ class Lexer:
         # 寻找Token
         if c.isalpha() or c == '_':
             return self.scan_keyword(c)
-        elif c == '"' or c == '\'' or c == '\\':
-            return self.scan_string(c)
         elif c.isdigit() or c == '.':
             return self.scan_number(c)
+        elif c == '"' or c == '\'' or c == '\\':
+            return self.scan_string(c)
         elif not self.scan_comment(c):
             return self.scan_symbol(c)
         return self.scan_next()
@@ -139,17 +139,17 @@ class Lexer:
     def scan_comment(self, c: str) -> bool:
         c2 = ''
         if self.mul_comment and c == '%':
-            c2 = self.next_char(False)
-            if c2 == '>':
+            c2 = self.next_char()
+            if c2 == ')':
                 self.mul_comment = False
                 return True
-        if not self.mul_comment and c == '<':
-            c2 = self.next_char(False)
+        if not self.mul_comment and c == '(':
+            c2 = self.next_char()
             if c2 == '%':
                 self.mul_comment = True
                 return True
         if not self.mul_comment and c == '%':
-            c2 = self.next_char(False)
+            c2 = self.next_char()
             if c2 == '%':
                 self.in_comment = True
                 return True
@@ -171,7 +171,7 @@ class Lexer:
         return token
 
     def scan_string(self, delim: str) -> Token:
-        i, buf = 0, [delim, ]
+        i, buf = 0, []
         c = self.next_char()
         while c != delim and c != '':
             if i >= TextLen - 1:
@@ -183,10 +183,8 @@ class Lexer:
             c = self.next_char()
         if c == '':
             fatal("Unclosed string")
-        else:
-            buf.append(delim)
         token = Token(TokenType.T_STRLIT)
-        token.tok_str = ''.join(buf)
+        token.tok_str = "".join(buf)
         return token
 
     def scan_number(self, c: str) -> Token:
@@ -274,4 +272,3 @@ class Lexer:
     #     self.scan(Thistoken)
     #     if Thistoken.token != TokenType.T_STRLIT:
     #         fatal(f"Expecting pre-processor file name, got {Text}")
-

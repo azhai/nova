@@ -20,5 +20,7 @@
 __pycache__/
 alpy/out.*
 bin/*
+tests/bin
+tests/trial
 tmp/
 vendor/

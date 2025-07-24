@@ -1,7 +1,7 @@
 from typing import List
 
+from cgen import codegen
 from defs import Sym, SymType, DataType, ASTNode, ASTNodeType, fatal
-from cgen import cg_func_preamble, cg_func_postamble
 from genast import gen_ast
 from syms import add_symbol, find_symbol, set_cur_func
 
@@ -66,11 +66,11 @@ class FuncProcessor:
         if not fn_sym or not body:
             return
         # 生成函数前导
-        cg_func_preamble(fn_sym)
+        codegen.cg_func_preamble(fn_sym)
         # 生成函数体
         gen_ast(body)
         # 生成函数后导
-        cg_func_postamble()
+        codegen.cg_func_postamble()
 
 
 func_processor = FuncProcessor()

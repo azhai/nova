@@ -1,4 +1,5 @@
 from typing import Optional
+
 from defs import ASTNode, ASTNodeType, DataType, TokenType, TypeKind, Sym, SymType, cast_node, fatal, ty_flt64
 from syms import add_symbol
 from typs import TypeProcessor, parse_litval
@@ -102,6 +103,7 @@ class StmtProcessor:
         )
         return node
 
+
 def gen_stat_assign(val: ASTNode, expr: ASTNode) -> ASTNode:
     """ 创建赋值语句AST节点 """
     expr = cast_node(expr, val.type)
@@ -114,6 +116,7 @@ def gen_stat_assign(val: ASTNode, expr: ASTNode) -> ASTNode:
     node.rvalue = False
     return node
 
+
 def gen_stat_printf(first: ASTNode, expr: ASTNode) -> ASTNode:
     """ 创建打印语句AST节点 """
     if expr.type.kind == TypeKind.TY_FLT32:
@@ -124,6 +127,7 @@ def gen_stat_printf(first: ASTNode, expr: ASTNode) -> ASTNode:
         right=expr
     )
     return node
+
 
 def gen_stat_declare(ident: ASTNode, expr: ASTNode) -> ASTNode:
     """ 创建声明语句AST节点 """

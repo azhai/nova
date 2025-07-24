@@ -1,12 +1,15 @@
-from typing import Optional, List, Dict
+import sys
+from typing import Optional
 
 from alpy.defs import ASTNode
-from defs import Sym, SymType, OutFile, TypeKind, fatal
+from defs import Sym, SymType, TypeKind, fatal
+
 
 class SymTable:
     """ 符号表节点 """
     scope: str
     parent: Optional['SymTable']
+
     # children: Dict[str, 'SymTable']
     # sym_dict: Dict[str, Sym]
 
@@ -16,12 +19,11 @@ class SymTable:
         self.children = {}
         self.sym_dict = {}
 
-
-# class SymProcessor:
-#     def __init__(self):
-#         self.sym_stack: List[Dict[str, Sym]] = [{}]  # 作用域栈，每个作用域是符号字典
-#         self.GlobHead: Optional[Sym] = None  # 全局符号列表头
-#         self.CurFunc: Optional[Sym] = None  # 当前函数
+    # class SymProcessor:
+    #     def __init__(self):
+    #         self.sym_stack: List[Dict[str, Sym]] = [{}]  # 作用域栈，每个作用域是符号字典
+    #         self.GlobHead: Optional[Sym] = None  # 全局符号列表头
+    #         self.CurFunc: Optional[Sym] = None  # 当前函数
 
     def set_cur_func(self, fn_sym: Sym) -> None:
         """设置当前函数"""
@@ -103,24 +105,28 @@ class SymTable:
             if sym.sym_type == SymType.SYM_VAR and sym.init_val is not None:
                 cgglobsym(sym)
 
-    def dump_syms(self) -> None:
+    def dump_syms(self, output=None) -> None:
         """ 打印符号表内容（调试用） """
         from typs import get_typename
-        print(f"Scope {self.scope}:", file=OutFile)
+        print(f"Scope {self.scope}:", file=output)
         for name, sym in self.sym_dict.items():
             type_str = get_typename(sym.type)
-            print(f"  {name}: type={type_str}, kind={sym.sym_type}", file=OutFile)
+            print(f"  {name}: type={type_str}, kind={sym.sym_type}", file=output)
         for child in root.children.values():
             child.dump_syms()
 
-def gen_glob_syms() -> None:
+
+def gen_glob_syms(output=None) -> None:
     """ 生成全局符号的代码 """
     root.gen_syms()
 
-def dump_syms() -> None:
-    """ 打印符号表内容（调试用） """
-    print("Symbol table:", file=OutFile)
-    root.dump_syms()
+
+def dump_syms(output=None) -> None:
+    """ 打印符号表内容（调试用）"""
+    if output is None:
+        output = sys.stdout
+    print("Symbol table:", file=output)
+    root.dump_syms(output)
 
 
 # 创建符号处理器实例并导出函数

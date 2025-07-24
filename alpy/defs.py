@@ -1,19 +1,17 @@
 import sys
-import argparse
 from enum import IntEnum
 from typing import Optional
 
 # Global variables
-NOREG = -1
-OutFile: Optional[object] = None
-DebugFile: Optional[object] = None
+NO_REG = -1
+
 
 def fatal(msg: str):
     raise Exception(f"Fatal error: {msg}")
 
 
 def notice(msg: str):
-    print(f"Notice error: {msg}")
+    print(f"Notice error: {msg}", file=sys.stderr)
 
 
 def slash_char(c: str) -> str:
@@ -41,45 +39,44 @@ def quote_char(c: str) -> str:
 
 
 def quote_string(s: str) -> str:
-    return ''.join([quote_char(c) for c in s])
-
-
-def init_global_vars(args: argparse.Namespace) -> str:
-    global OutFile, DebugFile
-    # 设置输出文件
-    output_file = args.output or 'out.q'
-    try:
-        OutFile = open(output_file, 'w')
-    except IOError as e:
-        fatal(f"Cannot open output file {output_file}: {e}")
-
-    # 设置调试文件
-    if args.debug:
-        try:
-            DebugFile = open('debug.log', 'w')
-        except IOError as e:
-            fatal(f"Cannot open debug file: {e}")
-    else:
-        DebugFile = None
-    return output_file
-
-def close_all_files(output_file: str):
-    global OutFile, DebugFile
-    if OutFile:
-        OutFile.close()
-    if DebugFile:
-        DebugFile.close()
-    print(f"Compilation successful. Output written to {output_file}", file=sys.stderr)
+    return "".join([quote_char(c) for c in s])
 
 
 def read_file(filename: str) -> str:
     """ 读取文件内容 """
     try:
         fh = open(filename, 'r')
-        return fh.read()
+        content = fh.read()
+        fh.close()
     except FileNotFoundError:
-        notice(f"File not found: {filename}")
-        return sys.stdin.read()
+        content = ""
+        fatal(f"File not found: {filename}")
+    return content
+
+
+class Output:
+
+    def __init__(self, outfile: str, logfile: str = ""):
+        self.out = self.open(outfile) if outfile else sys.stdout
+        self.log = self.open(logfile) if logfile else sys.stderr
+
+    @staticmethod
+    def open(filename: str):
+        """ 打开文件准备写入 """
+        try:
+            return open(filename, 'w')
+        except FileNotFoundError:
+            notice(f"File not found: {filename}")
+        except IOError as e:
+            notice(f"Cannot open file: {e}")
+        return None
+
+    def close(self):
+        """ 关闭文件 """
+        if self.out:
+            self.out.close()
+        if self.log:
+            self.log.close()
 
 
 class TokenType(IntEnum):

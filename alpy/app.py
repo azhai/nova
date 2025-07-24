@@ -22,13 +22,12 @@
 """
 
 import argparse
-import sys
-from astnodes import dump_ast
-from cgen import cg_file_preamble, cg_file_postamble
-from defs import init_global_vars, close_all_files, ASTNode
+
+from astnodes import dump_ast, free_ast
+from cgen import codegen
+from defs import ASTNode, Output
 from lexer import Lexer
 from parser import Parser
-from strlits import gen_strlits
 from syms import gen_glob_syms
 
 
@@ -40,35 +39,38 @@ def main():
     parser.add_argument('-d', '--debug', action='store_true', help='Enable debug output')
     args = parser.parse_args()
 
-    output_file = init_global_vars(args)
-    print("Parsing...", file=sys.stderr)
+    output_file = args.output or 'out.q'
+    output = Output(output_file)
     input_file = args.input_file or "tests/test001.al"
 
     # 生成代码
-    print("Generating code...", file=sys.stderr)
-    cg_file_preamble()
-    ast = parse_program(input_file)
-    print("\nAST nodes:")
-    dump_ast(None, ast)
-    cg_file_postamble()
+    print("\nParsing...", file=output.log)
+    codegen.cg_file_preamble()
+    ast = parse_program(input_file, output)
+    codegen.cg_file_postamble()
+    codegen.write_all(output.out)
+    if ast:
+        print("\nAST nodes in {}:\n".format(input_file), file=output.log)
+        dump_ast(output.log, ast)
+    print("\nGenerating code...\n", file=output.log)
+    codegen.write_all(output.log)
 
     # 清理
-    close_all_files(output_file)
+    free_ast(ast)
+    output.close()
 
 
-def parse_program(filename: str) -> ASTNode|None:
+def parse_program(filename: str, output: Output) -> ASTNode | None:
     lexer = Lexer(filename)
-    lexer.dump_tokens()
-    print("")
+    print("\nTokens in {}:".format(filename), file=output.log)
+    lexer.dump_tokens(output.log)
 
     parser = Parser(lexer)
     ast = parser.parse_program()
-    gen_strlits()
-    gen_glob_syms()
-
     # 添加类型信息
     # print("Adding type information...", file=sys.stderr)
     # add_type(ast)
+    gen_glob_syms()
     return ast
 
 

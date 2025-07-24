@@ -1,13 +1,13 @@
 from typing import Optional
 
-from defs import ASTNode, ASTNodeType, DataType, SymType, OutFile, fatal
 from cgen import (
     cgloadlit, cgloadvar, cgstorvar, cgadd, cgsub, cgmul, cgdiv,
     cgnegate, cgcompare, cgjump, cgjump_if_false, cgnot, cginvert,
     cgand, cgor, cgxor, cgshl, cgshr, cgcall, cgprint, cgaddlocal,
-    genlabel, cglabel
+    gen_label, cglabel, cgret
 )
-from typs import is_integer, is_float
+from defs import ASTNode, ASTNodeType, DataType, SymType, fatal
+from strlits import get_strlit_label
 
 
 class ASTCodeGenerator:
@@ -51,8 +51,8 @@ class ASTCodeGenerator:
             return cgcompare(node.op, left_temp, right_temp, node.type)
         elif node.op == ASTNodeType.A_IF:
             cond_temp = cls.gen_ast(node.left)
-            label_else = genlabel()
-            label_end = genlabel()
+            label_else = gen_label()
+            label_end = gen_label()
             cgjump_if_false(cond_temp, label_else)
             cls.gen_ast(node.right.left)
             cgjump(label_end)
@@ -61,9 +61,9 @@ class ASTCodeGenerator:
             cglabel(label_end)
             return 0
         elif node.op == ASTNodeType.A_WHILE:
-            label_start = genlabel()
-            label_body = genlabel()
-            label_end = genlabel()
+            label_start = gen_label()
+            label_body = gen_label()
+            label_end = gen_label()
             cglabel(label_start)
             cond_temp = cls.gen_ast(node.left)
             cgjump_if_false(cond_temp, label_end)
@@ -75,9 +75,9 @@ class ASTCodeGenerator:
         elif node.op == ASTNodeType.A_FOR:
             # 初始化语句
             cls.gen_ast(node.left.left)
-            label_start = genlabel()
-            label_body = genlabel()
-            label_end = genlabel()
+            label_start = gen_label()
+            label_body = gen_label()
+            label_end = gen_label()
             cglabel(label_start)
             # 条件判断
             if node.left.right:
@@ -95,7 +95,6 @@ class ASTCodeGenerator:
         elif node.op in (ASTNodeType.A_PRINT, ASTNodeType.A_PRINTF):
             expr_temp = cls.gen_ast(node.right)
             # 根据类型选择合适的格式字符串
-            from strlits import add_strlit, get_strlit_label
             # if is_integer(node.left.type):
             #     label = get_strlit_label("%d\n")
             # elif is_float(node.left.type):
@@ -127,7 +126,7 @@ class ASTCodeGenerator:
             return cgcall(node.sym, len(args), args, arg_types)
         elif node.op == ASTNodeType.A_RETURN:
             expr_temp = cls.gen_ast(node.left)
-            print(f"  ret {expr_temp}", file=OutFile)
+            cgret(expr_temp)
             return expr_temp
         elif node.op == ASTNodeType.A_BLOCK:
             # 处理语句块中的所有语句
