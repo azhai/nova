@@ -1,8 +1,7 @@
 import sys
 from typing import Optional
 
-from alpy.defs import ASTNode
-from defs import Sym, SymType, TypeKind, fatal
+from defs import ASTNode, Sym, SymType, TypeKind, fatal
 
 
 class SymTable:
