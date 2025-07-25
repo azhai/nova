@@ -1,6 +1,7 @@
 import sys
 from typing import Optional
 
+from cgen import cg_glob_sym
 from defs import ASTNode, Sym, SymType, TypeKind, fatal
 
 
@@ -99,10 +100,9 @@ class SymTable:
 
     def gen_syms(self) -> None:
         """ 生成符号的代码 """
-        from cgen import cgglobsym
         for sym in self.sym_dict.values():
             if sym.sym_type == SymType.SYM_VAR and sym.init_val is not None:
-                cgglobsym(sym)
+                cg_glob_sym(sym)
 
     def dump_syms(self, output=None) -> None:
         """ 打印符号表内容（调试用） """
