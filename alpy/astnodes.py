@@ -84,7 +84,7 @@ def dump_ast(out, node: Optional[ASTNode], level: int = 0) -> None:
         else:
             out.write(f"({node.numlit.intval})")
     elif node.op == ASTNodeType.A_ASSIGN:
-        out.write(f"{node.sym.name} = ")
+        out.write(f"{node.left.sym.name} = ")
     elif node.op == ASTNodeType.A_LOCAL:
         out.write(f"{node.sym.name}")
     elif node.op in (ASTNodeType.A_PRINT, ASTNodeType.A_PRINTF, ASTNodeType.A_FUNCCALL):

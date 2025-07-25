@@ -265,7 +265,7 @@ class Parser:
         if node is None:
             node = proc
         else:
-            node.right = proc
+            node = ASTNode(ASTNodeType.A_GLUE, left=node, right=proc)
         self.rbrace()
         self.add_node(node)
         return node
@@ -293,6 +293,7 @@ class Parser:
         left = self.expression()
         self.match_type(TokenType.T_ASSIGN)
         right = self.expression()
+        self.semi()
         node = ASTNode(ASTNodeType.A_ASSIGN)
         node.left = left
         node.right = right
@@ -361,6 +362,7 @@ class Parser:
         self.lparen()
         args = None if self.rparen(False) else self.expression_list()
         self.rparen()
+        self.semi()
         node = ASTNode(ASTNodeType.A_FUNCCALL)
         node.strlit = func_name
         node.right = args
@@ -371,13 +373,12 @@ class Parser:
         """
         expression_list= expression (COMMA expression_list)*
         """
-        root = self.expression()
-        node = root
+        expr = self.expression()
+        node = ASTNode(ASTNodeType.A_GLUE, left=expr)
         while self.comma(False):
-            next_arg = self.expression()
-            node.mid = next_arg
-            node = next_arg
-        return root
+            expr = self.expression()
+            node = ASTNode(ASTNodeType.A_GLUE, left=expr, right=node)
+        return node
 
     def expression(self) -> ASTNode:
         """
@@ -397,12 +398,15 @@ class Parser:
                             | XOR relational_expression
                             )*
         """
+        invert = self.match_type(TokenType.T_INVERT, False)
         left = self.relational_expression()
-        while self.curr.token in (TokenType.T_AMPER, TokenType.T_OR, TokenType.T_XOR):
+        if invert:
+            left = ExprProcessor.unary_op(ASTNodeType.A_INVERT, left)
+        while self.curr.token in (TokenType.T_AND, TokenType.T_OR, TokenType.T_XOR):
             op = self.map_token_to_ast_op(self.curr.token)
             self.next_token()
             right = self.relational_expression()
-            left = ExprProcessor.binop(left, op, right)
+            left = ExprProcessor.binary_op(left, op, right)
         return left
 
     def relational_expression(self) -> ASTNode:
@@ -418,13 +422,15 @@ class Parser:
                                | NE shift_expression
                                )?
         """
+        log_not = self.match_type(TokenType.T_LOGNOT, False)
         left = self.shift_expression()
-        while self.curr.token in (TokenType.T_EQ, TokenType.T_NE, TokenType.T_LT, TokenType.T_GT, TokenType.T_LE,
-                                  TokenType.T_GE):
+        if log_not:
+            left = ExprProcessor.unary_op(ASTNodeType.A_NOT, left)
+        while TokenType.T_EQ <= self.curr.token <= TokenType.T_GE:
             op = self.map_token_to_ast_op(self.curr.token)
             self.next_token()
             right = self.shift_expression()
-            left = ExprProcessor.binop(left, op, right)
+            left = ExprProcessor.binary_op(left, op, right)
         return left
 
     def shift_expression(self) -> ASTNode:
@@ -439,7 +445,7 @@ class Parser:
             op = self.map_token_to_ast_op(self.curr.token)
             self.next_token()
             right = self.additive_expression()
-            left = ExprProcessor.binop(left, op, right)
+            left = ExprProcessor.binary_op(left, op, right)
         return left
 
     def additive_expression(self) -> ASTNode:
@@ -451,12 +457,15 @@ class Parser:
                              | MINUS multiplicative_expression
                              )*
         """
+        negate = self.match_type(TokenType.T_MINUS, False)
         left = self.multiplicative_expression()
+        if negate:
+            left = ExprProcessor.unary_op(ASTNodeType.A_NEGATE, left)
         while self.curr.token in (TokenType.T_PLUS, TokenType.T_MINUS):
             op = self.map_token_to_ast_op(self.curr.token)
             self.next_token()
             right = self.multiplicative_expression()
-            left = ExprProcessor.binop(left, op, right)
+            left = ExprProcessor.binary_op(left, op, right)
         return left
 
     def multiplicative_expression(self) -> ASTNode:
@@ -480,7 +489,7 @@ class Parser:
             op = self.map_token_to_ast_op(self.curr.token)
             self.next_token()
             right = self.factor()
-            left = ExprProcessor.binop(left, op, right)
+            left = ExprProcessor.binary_op(left, op, right)
         return left
 
     def factor(self) -> ASTNode | None:
@@ -562,7 +571,7 @@ class Parser:
             TokenType.T_GE: ASTNodeType.A_GE,
             TokenType.T_LSHIFT: ASTNodeType.A_LSHIFT,
             TokenType.T_RSHIFT: ASTNodeType.A_RSHIFT,
-            TokenType.T_AMPER: ASTNodeType.A_AND,
+            TokenType.T_AND: ASTNodeType.A_AND,
             TokenType.T_OR: ASTNodeType.A_OR,
             TokenType.T_XOR: ASTNodeType.A_XOR,
             TokenType.T_INVERT: ASTNodeType.A_INVERT,

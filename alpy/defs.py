@@ -78,7 +78,7 @@ class Output:
 
 class TokenType(IntEnum):
     T_EOF = 0
-    T_AMPER = 1
+    T_AND = 1
     T_OR = 2
     T_XOR = 3
     T_EQ = 4
@@ -156,13 +156,15 @@ class TypeKind(IntEnum):
     TY_INT16 = 3
     TY_INT32 = 4
     TY_INT64 = 5
-    TY_UINT8 = 6
-    TY_UINT16 = 7
-    TY_UINT32 = 8
-    TY_UINT64 = 9
-    TY_FLT32 = 10
-    TY_FLT64 = 11
-    TY_PTR = 12
+    TY_FLT32 = 6
+    TY_FLT64 = 7
+
+    TY_UINT8 = 10
+    TY_UINT16 = 11
+    TY_UINT32 = 12
+    TY_UINT64 = 13
+
+    TY_PTR = 16
 
 
 class DataType:
@@ -232,13 +234,13 @@ class ASTNodeType(IntEnum):
     A_GT = 11
     A_LE = 12
     A_GE = 13
-    A_NOT = 14
-    A_AND = 15
-    A_OR = 16
-    A_XOR = 17
-    A_INVERT = 18
-    A_LSHIFT = 19
-    A_RSHIFT = 20
+    A_AND = 14
+    A_OR = 15
+    A_XOR = 16
+    A_LSHIFT = 17
+    A_RSHIFT = 18
+    A_NOT = 19
+    A_INVERT = 20
     A_NUMLIT = 21
     A_IDENT = 22
     A_PRINT = 23
@@ -313,8 +315,7 @@ def cast_node(node: ASTNode, new_type: DataType) -> ASTNode | None:
     # 创建类型转换节点
     new_node = ASTNode(
         op=ASTNodeType.A_CAST,
-        left=node,
-        right=None,
+        right=node,
         type=new_type
     )
     new_node.rvalue = True

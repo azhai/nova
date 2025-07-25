@@ -244,17 +244,19 @@ class Lexer:
             '/': TokenType.T_SLASH,
             '%': TokenType.T_MOD,
             '=': TokenType.T_ASSIGN,
+            '<': TokenType.T_LT,
+            '>': TokenType.T_GT,
             '~': TokenType.T_INVERT,
             '!': TokenType.T_LOGNOT,
-            '&': TokenType.T_AMPER,
+            '&': TokenType.T_AND,
             '|': TokenType.T_OR,
             '^': TokenType.T_XOR,
+            ',': TokenType.T_COMMA,
             ';': TokenType.T_SEMI,
             '{': TokenType.T_LBRACE,
             '}': TokenType.T_RBRACE,
             '(': TokenType.T_LPAREN,
             ')': TokenType.T_RPAREN,
-            ',': TokenType.T_COMMA
         }
         if c in single_char_ops:
             tok_type = single_char_ops[c]

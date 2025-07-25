@@ -93,47 +93,45 @@ class TypeProcessor:
         return "unknown"
 
     @classmethod
-    def add_type(cls, node: 'ASTNode') -> None:
-        if not node:
-            return
+    def add_type(cls, node: ASTNode) -> ASTNode:
+        # Do nothing if no node, or it already has a type
+        if node is None or node.type is not None:
+            return node
+        # 比较运算结果为bool类型
+        if ASTNodeType.A_EQ <= node.op <= ASTNodeType.A_NOT:
+            node.type = cls.get_type(TypeKind.TY_BOOL)
+            return node
 
         # 递归处理子节点
-        cls.add_type(node.left)
-        cls.add_type(node.right)
+        node.left = cls.add_type(node.left)
+        node.right = cls.add_type(node.right)
 
         # 根据节点类型设置类型
+        if node.op == ASTNodeType.A_ASSIGN and node.right:
+            node.type = node.right.type
+            return node
+        elif node.op == ASTNodeType.A_CAST and node.right and node.type:
+            node.right = cls.widen_expression(node.right)
+            return node
+        elif node.op == ASTNodeType.A_IDENT and node.sym:
+            node.type = node.sym.type # 标识符类型从符号获取
+            return node
+
         if node.op == ASTNodeType.A_NUMLIT:
-            # 整数字面量，初始类型为int64
-            node.type = cls.get_type(TypeKind.TY_INT64)
-            # 拓宽到合适的类型
-            cls.widen_expression(node)
-        elif node.op == ASTNodeType.A_STRLIT:
-            # 字符串字面量类型
+            node.type = cls.get_type(TypeKind.TY_INT64) # 整数字面量，初始类型为int64
+            node = cls.widen_expression(node)
+        elif node.op == ASTNodeType.A_STRLIT: # 字符串字面量类型
             node.type = cls.get_type(TypeKind.TY_PTR)
-        elif node.op == ASTNodeType.A_IDENT:
-            # 标识符类型从符号获取
-            if node.sym:
-                node.type = node.sym.type
-        elif node.op in (ASTNodeType.A_ADD, ASTNodeType.A_SUBTRACT, ASTNodeType.A_MULTIPLY, ASTNodeType.A_DIVIDE):
-            # 二元运算类型
-            if node.left and node.right and node.left.type:
-                node.type = node.left.type
-        elif node.op in (ASTNodeType.A_EQ, ASTNodeType.A_NE, ASTNodeType.A_LT, ASTNodeType.A_GT, ASTNodeType.A_LE,
-                         ASTNodeType.A_GE):
-            # 比较运算结果为bool类型
-            node.type = cls.get_type(TypeKind.TY_BOOL)
-        elif node.op == ASTNodeType.A_ASSIGN:
-            # 赋值运算类型
-            if node.right:
+        elif ASTNodeType.A_ADD <= node.op <= ASTNodeType.A_NEGATE: # 二元运算类型
+            if node.right and node.right.type:
                 node.type = node.right.type
-        elif node.op == ASTNodeType.A_FUNCCALL:
-            # 函数调用类型
+        elif ASTNodeType.A_AND <= node.op <= ASTNodeType.A_INVERT: # 二元运算类型
+            if node.right and node.right.type:
+                node.type = node.right.type
+        elif node.op == ASTNodeType.A_FUNCCALL: # 函数调用类型
             if node.sym and node.sym.sym_type == SymType.SYM_FUNC:
                 node.type = node.sym.type
-        elif node.op == ASTNodeType.A_CAST:
-            # 类型转换类型
-            if node.right and node.type:
-                node.right = cls.widen_expression(node.right)
+        return node
 
     @staticmethod
     def parse_litval(token_type: TokenType, value: str) -> Litval:
