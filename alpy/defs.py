@@ -2,9 +2,6 @@ import sys
 from enum import IntEnum
 from typing import Optional
 
-# Global variables
-NO_REG = -1
-
 
 def fatal(msg: str):
     raise Exception(f"Fatal error: {msg}")

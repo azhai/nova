@@ -79,6 +79,8 @@ class ASTCodeGenerator:
             codegen.cg_print(label, expr_temp, node.right.type)
             return 0
         elif node.op == ASTNodeType.A_GLUE:
+            cls.gen_ast(node.left)
+            cls.gen_ast(node.right)
             return 0
         else:
             fatal(f"Unknown AST node type: {node.op}")
