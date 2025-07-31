@@ -153,7 +153,7 @@ class Lexer:
             self.temp = self.temp.lstrip()
 
     def scan_once(self, c: str):
-        """ 尝试查找一个token，注意以下三者的次序不能更换 """
+        """ 尝试查找一个token，注意以下次序不能更换 """
         token = None
         # 尝试数字或者关键词
         if c == '-' or c.isdigit():

@@ -3,4 +3,5 @@ void main(void) {
   printf("%d\n", 32 + 2 * 3 - 5) ;
   printf("%d\n", 1001);
   printf("%d\n", - 23 + 2);
-}
+
+} %% 中文是注释
