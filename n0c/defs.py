@@ -39,18 +39,6 @@ def quote_string(s: str) -> str:
     return "".join([quote_char(c) for c in s])
 
 
-def read_file(filename: str) -> str:
-    """ 读取文件内容 """
-    try:
-        fh = open(filename, 'r')
-        content = fh.read()
-        fh.close()
-    except FileNotFoundError:
-        content = ""
-        fatal(f"File not found: {filename}")
-    return content
-
-
 class Output:
 
     def __init__(self, outfile: str, logfile: str = ""):
