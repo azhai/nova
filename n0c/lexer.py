@@ -148,6 +148,7 @@ class Lexer:
                 token = Token(TokType.T_COMMENT, temp.rstrip())
             else:
                 token = Token(TokType.T_STRING, temp)
+            token.line_no = self.line_no
             return token
 
     def scan_number(self, c: str):
@@ -168,8 +169,9 @@ class Lexer:
                 break
         temp = self.buf[:i+1].replace("_", "")
         if temp != "" and temp.isnumeric():
-            number = float(temp) if is_float else int(temp)
-            token = Token(TokType.T_NUMBER, temp, number)
+            token = Token(TokType.T_NUMBER, temp)
+            token.value = float(temp) if is_float else int(temp)
+            token.line_no = self.line_no
             self.buf = self.buf[i+1:]
             return token
         return None
@@ -188,8 +190,9 @@ class Lexer:
         temp = self.buf[:i+1].replace("_", "")
         # if temp != "" and temp.isnumeric():
         if temp != "":
-            number = int(temp, base)
-            token = Token(TokType.T_NUMBER, temp, number)
+            token = Token(TokType.T_NUMBER, temp)
+            token.value = int(temp, base)
+            token.line_no = self.line_no
             self.buf = self.buf[i+1:]
         return token
 
@@ -199,7 +202,9 @@ class Lexer:
             return None
         for text, op in items:
             if self.buf.startswith(text):
-                token = Token(TokType.T_OPERATOR, text, op.value)
+                token = Token(TokType.T_OPERATOR, text)
+                token.value = op.value
+                token.line_no = self.line_no
                 self.buf = self.buf[len(text):]
                 return token
         return None
@@ -211,6 +216,7 @@ class Lexer:
         for word in words:
             if self.buf.startswith(word):
                 token = Token(TokType.T_KEYWORD, word)
+                token.line_no = self.line_no
                 self.buf = self.buf[len(word):]
                 return token
         return None
@@ -223,17 +229,42 @@ class Lexer:
                 break
         if i >= 0:
             token = Token(TokType.T_IDENT, self.buf[:i+1])
+            token.line_no = self.line_no
             self.buf = self.buf[i+1:]
             return token
         return None
+
+
+class TokenQueue:
+    tokens: list[Token] = []
+    offset: int = 0
+
+    def __init__(self, it = None):
+        if it:
+            self.tokens = list(it)
+
+    def __len__(self):
+        return len(self.tokens)
+
+    def remain(self):
+        return len(self.tokens) - self.offset
+
+    def curr_token(self):
+        if 0 <= self.offset < len(self.tokens):
+            return self.tokens[self.offset]
+        return None
+
+    def next_token(self):
+        self.offset += 1
+        return self.curr_token()
 
     def dump_tokens(self, out=None):
         if not out:
             out = sys.stdout
         line = 0
-        for token in self.scan():
-            if self.line_no > line:
-                line = self.line_no
+        for token in self.tokens:
+            if token.line_no > line:
+                line = token.line_no
                 out.write("\n{}: ".format(line))
             out.write("{} ".format(token))
         out.write("\n")

@@ -24,7 +24,9 @@
 import argparse
 
 from defs import ASTNode, Output
-from lexer import Lexer
+from lexer import Lexer, TokenQueue
+
+
 # from parser import Parser
 # from syms import gen_glob_syms
 # from cgen import codegen
@@ -44,8 +46,9 @@ def main():
     input_file = args.input_file or "tests/test001.al"
 
     lexer = Lexer(input_file)
+    que = TokenQueue(lexer.scan())
     print("\nTokens in {}:".format(input_file), file=output.log)
-    lexer.dump_tokens(output.log)
+    que.dump_tokens(output.log)
     print("\nTokens end", file=output.log)
     return
 

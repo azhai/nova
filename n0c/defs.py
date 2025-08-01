@@ -154,11 +154,14 @@ class TokType(IntEnum):
     T_OPERATOR = 7
 
 
-class Token:
 
-    def __init__(self, tok_type: TokType, text: str = "", value: int = 0):
-        self.tok_type: TokType = tok_type
-        self.text, self.value  = text, value
+class Token:
+    tok_type: TokType
+    line_no: int
+
+    def __init__(self, tok_type: TokType, text: str = ""):
+        self.tok_type, self.text = tok_type, text
+        self.line_no, self.value  = 0, 0
 
     def __str__(self):
         if self.tok_type is TokType.T_EOF:
