@@ -55,11 +55,11 @@ class Parser:
         return self.curr
 
     def match_type(self, token_type: TokenType, throw: bool = True) -> bool:
-        if self.curr.tok_type == token_type:
+        if self.curr.token == token_type:
             self.next_token()
             return True
         if throw:
-            fatal(f"Unexpected token {self.curr.tok_type}, expected {token_type}")
+            fatal(f"Unexpected token {self.curr.token}, expected {token_type}")
         return False
 
     def semi(self, throw: bool = True) -> bool:
@@ -148,7 +148,7 @@ class Parser:
         declaration_stmts= (typed_declaration ASSIGN expression SEMI)+
         """
         node, last = None, None
-        while self.is_type_token(self.curr.tok_type):
+        while self.is_type_token(self.curr.token):
             decl = self.typed_declaration()
             if self.match_type(TokenType.T_ASSIGN, False):
                 expr = self.expression()
@@ -198,22 +198,22 @@ class Parser:
                          | function_call
                          )
         """
-        if self.curr.tok_type == TokenType.T_RBRACE:
+        if self.curr.token == TokenType.T_RBRACE:
             return None
-        if self.curr.tok_type == TokenType.T_PRINTF:
+        if self.curr.token == TokenType.T_PRINTF:
             return self.print_statement()
-        elif self.curr.tok_type == TokenType.T_IF:
+        elif self.curr.token == TokenType.T_IF:
             return self.if_stmt()
-        elif self.curr.tok_type == TokenType.T_WHILE:
+        elif self.curr.token == TokenType.T_WHILE:
             return self.while_stmt()
-        elif self.curr.tok_type == TokenType.T_FOR:
+        elif self.curr.token == TokenType.T_FOR:
             return self.for_stmt()
-        elif self.curr.tok_type == TokenType.T_IDENT:
+        elif self.curr.token == TokenType.T_IDENT:
             if self.match_type(TokenType.T_LPAREN, False):
                 return self.function_call()
             else:
                 return self.assign_stmt()
-        return fatal(f"Unexpected token {self.curr.tok_type} in procedural statement")
+        return fatal(f"Unexpected token {self.curr.token} in procedural statement")
 
     def get_type(self) -> DataType:
         """
@@ -233,9 +233,9 @@ class Parser:
             TokenType.T_FLT32: ty_flt32,
             TokenType.T_FLT64: ty_flt64
         }
-        if self.curr.tok_type not in type_map:
-            fatal(f"Unknown type {self.curr.tok_type}")
-        type_obj = type_map[self.curr.tok_type]
+        if self.curr.token not in type_map:
+            fatal(f"Unknown type {self.curr.token}")
+        type_obj = type_map[self.curr.token]
         self.next_token()
         return type_obj
 
@@ -402,8 +402,8 @@ class Parser:
         left = self.relational_expression()
         if invert:
             left = ExprProcessor.unary_op(ASTNodeType.A_INVERT, left)
-        while self.curr.tok_type in (TokenType.T_AND, TokenType.T_OR, TokenType.T_XOR):
-            op = self.map_token_to_ast_op(self.curr.tok_type)
+        while self.curr.token in (TokenType.T_AND, TokenType.T_OR, TokenType.T_XOR):
+            op = self.map_token_to_ast_op(self.curr.token)
             self.next_token()
             right = self.relational_expression()
             left = ExprProcessor.binary_op(left, op, right)
@@ -426,8 +426,8 @@ class Parser:
         left = self.shift_expression()
         if log_not:
             left = ExprProcessor.unary_op(ASTNodeType.A_NOT, left)
-        while TokenType.T_EQ <= self.curr.tok_type <= TokenType.T_GE:
-            op = self.map_token_to_ast_op(self.curr.tok_type)
+        while TokenType.T_EQ <= self.curr.token <= TokenType.T_GE:
+            op = self.map_token_to_ast_op(self.curr.token)
             self.next_token()
             right = self.shift_expression()
             left = ExprProcessor.binary_op(left, op, right)
@@ -441,8 +441,8 @@ class Parser:
                         )*
         """
         left = self.additive_expression()
-        while self.curr.tok_type in (TokenType.T_LSHIFT, TokenType.T_RSHIFT):
-            op = self.map_token_to_ast_op(self.curr.tok_type)
+        while self.curr.token in (TokenType.T_LSHIFT, TokenType.T_RSHIFT):
+            op = self.map_token_to_ast_op(self.curr.token)
             self.next_token()
             right = self.additive_expression()
             left = ExprProcessor.binary_op(left, op, right)
@@ -461,8 +461,8 @@ class Parser:
         left = self.multiplicative_expression()
         if negate:
             left = ExprProcessor.unary_op(ASTNodeType.A_NEGATE, left)
-        while self.curr.tok_type in (TokenType.T_PLUS, TokenType.T_MINUS):
-            op = self.map_token_to_ast_op(self.curr.tok_type)
+        while self.curr.token in (TokenType.T_PLUS, TokenType.T_MINUS):
+            op = self.map_token_to_ast_op(self.curr.token)
             self.next_token()
             right = self.multiplicative_expression()
             left = ExprProcessor.binary_op(left, op, right)
@@ -485,8 +485,8 @@ class Parser:
                                     )*
         """
         left = self.factor()
-        while self.curr.tok_type in (TokenType.T_STAR, TokenType.T_SLASH, TokenType.T_MOD):
-            op = self.map_token_to_ast_op(self.curr.tok_type)
+        while self.curr.token in (TokenType.T_STAR, TokenType.T_SLASH, TokenType.T_MOD):
+            op = self.map_token_to_ast_op(self.curr.token)
             self.next_token()
             right = self.factor()
             left = ExprProcessor.binary_op(left, op, right)
@@ -499,7 +499,7 @@ class Parser:
               | FALSE
               | variable
         """
-        token = self.curr.tok_type
+        token = self.curr.token
         if token == TokenType.T_LPAREN:
             self.lparen()
             expr = self.expression()

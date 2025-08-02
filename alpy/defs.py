@@ -130,8 +130,8 @@ class TokenType(IntEnum):
 
 
 class Token:
-    def __init__(self, tok_type: TokenType = TokenType.T_EOF):
-        self.token: TokenType = tok_type
+    def __init__(self, token: TokenType = TokenType.T_EOF):
+        self.token: TokenType = token
         self.tok_str: Optional[str] = None
         self.num_type: NumType = NumType.NUM_INT
         self.num_val = 0

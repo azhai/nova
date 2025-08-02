@@ -165,8 +165,8 @@ class Lexer:
             c = self.next_char()
         self.back_pos()
         word = ''.join(buf)
-        tok_type = Keywords.get(word, TokenType.T_IDENT)
-        token = Token(tok_type)
+        token = Keywords.get(word, TokenType.T_IDENT)
+        token = Token(token)
         token.tok_str = word
         return token
 
@@ -233,8 +233,8 @@ class Lexer:
         if c in two_char_ops:
             next_c = self.next_char()
             if next_c in two_char_ops[c]:
-                tok_type = two_char_ops[c][next_c]
-                return Token(tok_type)
+                token = two_char_ops[c][next_c]
+                return Token(token)
             self.back_pos()
 
         single_char_ops = {
@@ -259,8 +259,8 @@ class Lexer:
             ')': TokenType.T_RPAREN,
         }
         if c in single_char_ops:
-            tok_type = single_char_ops[c]
-            return Token(tok_type)
+            token = single_char_ops[c]
+            return Token(token)
         fatal(f"Unknown character {c}")
         return None
 

@@ -5,6 +5,41 @@ from cgen import cg_glob_sym
 from defs import ASTNode, Sym, SymType, TypeKind, fatal
 
 
+all_scopes = []
+
+class Scope:
+    parent = None
+    name = ""
+
+    def __init__(self, parent = None):
+        self.parent = parent
+        self.sym_table = {}
+        all_scopes.append(self)
+
+    def find_symbol(self, name: str) -> Optional[Sym]:
+        """ 在所有作用域中查找符号，从当前作用域向上查找 """
+        obj = self
+        while obj is not None:
+            sym = obj.sym_table.get(name)
+            if sym:
+                return sym
+            obj = obj.parent
+        return None
+
+    def add_symbol(self, sym: Sym, is_global: bool = False) -> None:
+        """将符号添加到当前作用域"""
+        if not sym or not sym.name:
+            fatal("Invalid symbol")
+        obj = self
+        # 如果是全局符号，添加到全局符号列表
+        if is_global and sym.sym_type != SymType.SYM_LOCAL:
+            while obj.parent is not None:
+                obj = obj.parent
+        if sym.name in obj.sym_table:
+            fatal(f"Symbol '{sym.name}' already declared in current scope")
+        obj.sym_table[sym.name] = sym
+
+
 class SymTable:
     """ 符号表节点 """
     scope: str
