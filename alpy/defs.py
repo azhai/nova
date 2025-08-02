@@ -130,8 +130,8 @@ class TokenType(IntEnum):
 
 
 class Token:
-    def __init__(self, token: TokenType = TokenType.T_EOF):
-        self.token: TokenType = token
+    def __init__(self, tok_type: TokenType = TokenType.T_EOF):
+        self.token: TokenType = tok_type
         self.tok_str: Optional[str] = None
         self.num_type: NumType = NumType.NUM_INT
         self.num_val = 0
@@ -211,10 +211,10 @@ class Sym:
     def __init__(self, name: str, sym_type: SymType, val_type: DataType):
         self.name = name
         self.sym_type = sym_type
-        self.val_type = val_type
+        self.has_addr: bool = False
+        self.type: DataType = val_type
         self.init_val: Litval = Litval()
         self.params = []
-        self.has_addr: bool = False
         # self.count: int = 0
         # self.memb: Optional[Sym] = None
         # self.sibling: Optional[Sym] = None
