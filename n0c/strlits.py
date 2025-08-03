@@ -1,6 +1,13 @@
 from typing import Dict, Optional
 
-from defs import Strlit
+
+class Strlit:
+
+    def __init__(self, val: str, label: int,
+                 sibling = None):
+        self.val = val
+        self.label = label
+        self.sibling = sibling
 
 
 class StrLitProcessor:

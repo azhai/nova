@@ -7,7 +7,7 @@
 - 实现了编译器各模块：
 - `lexer.py` ：词法分析器
 - `parser.py` ：语法分析器
-- `astnodes.py` ：AST节点操作
+- `nodes.py` ：AST节点操作
 - `cgen.py` ：QBE代码生成器
 - `expr.py` ：表达式处理
 - `funcs.py` ：函数处理
@@ -24,13 +24,11 @@
 import argparse
 
 from defs import ASTNode, Output
-from lexer import Lexer, TokenQueue
-
-
-# from parser import Parser
-# from syms import gen_glob_syms
-# from cgen import codegen
-# from astnodes import dump_ast, free_ast
+from lexer import Lexer
+from parser import Parser
+from syms import gen_global_syms
+from cgen import codegen
+from nodes import dump_ast, free_ast
 
 
 def main():
@@ -45,19 +43,13 @@ def main():
     output = Output(output_file)
     input_file = args.input_file or "tests/test001.al"
 
-    lexer = Lexer(input_file)
-    que = TokenQueue(lexer.scan())
-    print("\nTokens in {}:".format(input_file), file=output.log)
-    que.dump_tokens(output.log)
-    print("\nTokens end", file=output.log)
-    return
-
     # 生成代码
     print("\nParsing...", file=output.log)
     codegen.cg_file_preamble()
     ast = parse_program(input_file, output)
     codegen.cg_file_postamble()
     codegen.write_all(output.out)
+
     if ast:
         print("\nAST nodes in {}:\n".format(input_file), file=output.log)
         dump_ast(output.log, ast)
@@ -72,15 +64,15 @@ def main():
 
 def parse_program(filename: str, output: Output) -> ASTNode | None:
     lexer = Lexer(filename)
-    print("\nTokens in {}:".format(filename), file=output.log)
-    lexer.dump_tokens(output.log)
-
     parser = Parser(lexer)
+    print("\nTokens in {}:".format(filename), file=output.log)
+    parser.queue.dump_tokens(output.log)
+
     ast = parser.parse_program()
     # 添加类型信息
     # print("Adding type information...", file=sys.stderr)
     # add_type(ast)
-    gen_glob_syms()
+    gen_global_syms()
     return ast
 
 

@@ -1,6 +1,5 @@
 import sys
 from enum import IntEnum, StrEnum
-from typing import Optional
 
 
 def fatal(msg: str):
@@ -63,105 +62,28 @@ class Output:
         if self.log:
             self.log.close()
 
-class NumType(StrEnum):
-    INT8 = "int8"
-    INT16 = "int16"
-    INT32 = "int32"
-    INT64 = "int64"
-    UINT8 = "uint8"
-    UINT16 = "uint16"
-    UINT32 = "uint32"
-    UINT64 = "uint64"
-    FLOAT32 = "float32"
-    FLOAT64 = "float64"
-
-    def is_integer(self):
-        return self.value.startswith("int")
-
-    def is_unsigned(self):
-        return self.value.startswith("uint")
-
-    def is_float(self):
-        return self.value.startswith("float")
-
-
-class OpType(IntEnum):
-    IT = 11
-    DOT = 12
-    RANGE = 13
-    RANGE_TOP = 14
-    ELLIPSES = 15
-    COMMA = 16
-    COLON = 17
-    SEMI = 18
-    LPAREN = 19
-    RPAREN = 20
-    LBRACE = 21
-    RBRACE = 22
-    ASSIGN = 23
-    UNPACK = 24
-    ADD = 25
-    SUB = 26
-    MUL = 27
-    DIV = 28
-    MOD = 29
-    QUO = 30
-    POW = 31
-    ADD_AS = 32
-    SUB_AS = 33
-    MUL_AS = 34
-    DIV_AS = 35
-    MOD_AS = 36
-    EQ = 37
-    NE = 38
-    LT = 39
-    LE = 40
-    GT = 41
-    GE = 42
-    NOT = 43
-    LOG_AND = 44
-    LOG_OR = 45
-    INVERT = 46
-    AND = 47
-    OR = 48
-    XOR = 49
-    LSHIFT = 50
-    RSHIFT = 51
-    DOLLAR = 52
-
-    def is_assignment(self):
-        return (self.value == OpType.ASSIGN or
-                OpType.ADD_AS <= self.value <= OpType.MOD_AS)
-
-    def is_arithmetic(self):
-        return OpType.ADD <= self.value <= OpType.POW
-
-    def is_comparison(self):
-        return OpType.EQ <= self.value <= OpType.GE
-
-    def is_logical(self):
-        return OpType.INVERT <= self.value <= OpType.RSHIFT
-
 
 class TokType(IntEnum):
     T_EOF = 0
-    T_COMMENT = 1
-    T_KEYWORD = 2
-    T_IDENT = 3
-    T_BOOL = 4
-    T_NUMBER = 5
-    T_STRING = 6
-    T_OPERATOR = 7
-
+    T_WHITESPACE = 1
+    T_COMMENT = 2
+    T_OPERATOR = 3
+    T_KEYWORD = 4
+    T_IDENT = 5
+    T_VOID = 6
+    T_BOOL = 7
+    T_NUMBER = 8
+    T_STRING = 9
 
 
 class Token:
     tok_type: TokType
     line_no: int
+    text, value = "", 0
 
     def __init__(self, tok_type: TokType, text: str = ""):
-        self.tok_type, self.text = tok_type, text
-        self.line_no, self.value  = 0, 0
+        self.tok_type, self.line_no = tok_type, 0
+        self.text, self.value = text, 0
 
     def __str__(self):
         if self.tok_type is TokType.T_EOF:
@@ -176,152 +98,215 @@ class Token:
         else:
             return f"{name}"
 
+    def is_type(self) -> bool:
+        if self.tok_type != TokType.T_KEYWORD:
+            return False
+        return self.text in ValType
 
-class TypeKind(IntEnum):
-    K_VOID = 0
-    K_BOOL = 1
-    K_INT8 = 2
-    K_INT16 = 3
-    K_INT32 = 4
-    K_INT64 = 5
-    K_FLT32 = 6
-    K_FLT64 = 7
 
-    K_UINT8 = 10
-    K_UINT16 = 11
-    K_UINT32 = 12
-    K_UINT64 = 13
+class OpCode(IntEnum):
+    NOOP = 0
+    IT = 11
+    DOT = 12
+    RANGE = 13
+    RANGE_TOP = 14
+    ELLIPSES = 15
+    COMMA = 16
+    COLON = 17
+    SEMI = 18
+    LPAREN = 19
+    RPAREN = 20
+    LBRACE = 21
+    RBRACE = 22
+    DOLLAR = 23
 
-    K_PTR = 16
+    ASSIGN = 30
+    UNPACK = 31
+    ADD = 32
+    SUB = 33
+    MUL = 34
+    DIV = 35
+    MOD = 36
+    QUO = 37
+    POW = 38
+    ADD_AS = 39
+    SUB_AS = 40
+    MUL_AS = 41
+    DIV_AS = 42
+    MOD_AS = 43
+    EQ = 44
+    NE = 45
+    LT = 46
+    LE = 47
+    GT = 48
+    GE = 49
+    NOT = 50
+    LOG_AND = 51
+    LOG_OR = 52
+    INVERT = 53
+    AND = 54
+    OR = 55
+    XOR = 56
+    LSHIFT = 57
+    RSHIFT = 58
 
-class DataType:
-    def __init__(self, kind: TypeKind, size: int = 0, align: int = 0, is_unsigned: bool = False):
-        self.kind = kind
-        self.size = size
-        self.align = align
-        self.is_unsigned = is_unsigned
-        self.sibling: Optional[DataType] = None
+def is_assignment(code: int) -> bool:
+    return (code == OpCode.ASSIGN or
+            OpCode.ADD_AS <= code <= OpCode.MOD_AS)
+
+def is_arithmetic(code: int) -> bool:
+    return OpCode.ADD <= code <= OpCode.POW
+
+def is_comparison(code: int) -> bool:
+    return OpCode.EQ <= code <= OpCode.GE
+
+def is_logical(code: int) -> bool:
+    return OpCode.INVERT <= code <= OpCode.RSHIFT
+
+
+class Keyword(StrEnum):
+    PRINTF = "printf"
+    IF = "if"
+    ELSE = "else"
+    WHILE = "while"
+    FOR = "for"
+    IN = "in"
+    BREAK = "break"
+    CONTINUE = "continue"
+    RETURN = "return"
+    VOID = "void"
+
+def create_keyword_token(word: str) -> Token:
+    if word == "null":
+        token = Token(TokType.T_VOID, word)
+    elif word == "true" or word == "false":
+        token = Token(TokType.T_BOOL, word)
+    else:
+        token = Token(TokType.T_KEYWORD, word)
+    return token
+
+
+class ValType(StrEnum):
+    VOID = "void"
+    BOOL = "bool"
+    STR = "str"
+    PTR = "ptr"
+    OBJ = "obj"
+    REF = "ref"
+
+    INT8 = "int8"
+    INT16 = "int16"
+    INT32 = "int32"
+    INT64 = "int64"
+    UINT8 = "uint8"
+    UINT16 = "uint16"
+    UINT32 = "uint32"
+    UINT64 = "uint64"
+    FLOAT32 = "float32"
+    FLOAT64 = "float64"
+
+    def is_integer(self) -> bool:
+        return self.name.startswith("INT")
+
+    def is_unsigned(self) -> bool:
+        return self.name.startswith("UINT")
+
+    def is_float(self) -> bool:
+        return self.name.startswith("FLOAT")
+
+    def bytes(self) -> int:
+        if self.name == "BOOL":
+            return 1
+        elif self.is_integer():
+            return int(self.name[3:]) // 8
+        elif self.is_unsigned():
+            return int(self.name[4:]) // 8
+        elif self.is_float():
+            return int(self.name[5:]) // 8
+        return 0
 
 
 class SymType(IntEnum):
     S_LOCAL = 1
-    S_VAR = 2
-    S_FUNC = 3
+    S_CONST = 2
+    S_VAR = 3
+    S_FUNC = 4
+    S_CLASS = 5
 
 
-class Sym:
+class Symbol:
     name: str
     sym_type: SymType
-    val_type: TypeKind
+    val_type: ValType
+    init_val = ""
+    params = []
 
-    def __init__(self, name: str, sym_type: SymType, val_type: TypeKind):
+    def __init__(self, name: str, sym_type: SymType, val_type: ValType):
         self.name = name
         self.sym_type = sym_type
         self.val_type = val_type
-        self.has_addr: bool = False
-        self.params = []
-        # self.count: int = 0
-        # self.memb: Optional[Sym] = None
-        # self.sibling: Optional[Sym] = None
 
 
 class NodeType(IntEnum):
-    A_ASSIGN = 1
-    A_CAST = 2
-    A_ADD = 3
-    A_SUBTRACT = 4
-    A_MULTIPLY = 5
-    A_DIVIDE = 6
-    A_NEGATE = 7
-    A_EQ = 8
-    A_NE = 9
-    A_LT = 10
-    A_GT = 11
-    A_LE = 12
-    A_GE = 13
-    A_AND = 14
-    A_OR = 15
-    A_XOR = 16
-    A_LSHIFT = 17
-    A_RSHIFT = 18
-    A_NOT = 19
-    A_INVERT = 20
-    A_NUMLIT = 21
-    A_IDENT = 22
-    A_PRINT = 23
-    A_GLUE = 24
-    A_IF = 25
-    A_WHILE = 26
-    A_FOR = 27
-    A_TYPE = 28
-    A_STRLIT = 29
-    A_LOCAL = 30
-    A_FUNCTION = 31
-    A_FUNCCALL = 32
-    A_PRINTF = 33
-    A_MOD = 34
-    A_RETURN = 35
-    A_BLOCK = 36
+    A_GLUE = 0
+    A_LOCAL = 1
+
+    A_CAST = 10
+    A_CALL = 11
+    A_FUNC = 12
+    A_CLASS = 13
+    A_TYPE = 14
+    A_IDENT = 15
+    A_VALUE = 16
+    A_BLOCK = 17
+    A_GOTO = 18
+    A_RETURN = 19
+    A_BREAK = 20
+    A_CONTINUE = 21
+    A_IF = 22
+    A_WHILE = 23
+    A_FOR = 24
+
+    A_ASSIGN = 30
+    A_UNPACK = 31
+    A_ADD = 32
+    A_SUB = 33
+    A_MUL = 34
+    A_DIV = 35
+    A_MOD = 36
+    A_QUO = 37
+    A_POW = 38
+    A_ADD_AS = 39
+    A_SUB_AS = 40
+    A_MUL_AS = 41
+    A_DIV_AS = 42
+    A_MOD_AS = 43
+    A_EQ = 44
+    A_NE = 45
+    A_LT = 46
+    A_LE = 47
+    A_GT = 48
+    A_GE = 49
+    A_NOT = 50
+    A_LOG_AND = 51
+    A_LOG_OR = 52
+    A_INVERT = 53
+    A_AND = 54
+    A_OR = 55
+    A_XOR = 56
+    A_LSHIFT = 57
+    A_RSHIFT = 58
+
+    A_PRINTF = 60
 
 
 class ASTNode:
-    def __init__(self, op: NodeType, left=None, right=None,
-                 type: Optional[DataType] = None, sym: Optional[Sym] = None):
-        self.op = op
-        self.type: Optional[DataType] = type
-        self.rvalue: bool = False
-        self.left: Optional[ASTNode] = left
-        self.mid: Optional[ASTNode] = None
-        self.right: Optional[ASTNode] = right
-        self.sym: Optional[Sym] = sym
-        self.numlit: Litval = Litval()
-        self.strlit: Optional[str] = None
+    op: NodeType
+    sym: Symbol|None
+    val_type: ValType|None
+    left, right, other = None, None, None
+    number, string = 0, ""
 
-
-# Global type instances
-ty_void = DataType(TypeKind.K_VOID, 1, 1)
-ty_bool = DataType(TypeKind.K_BOOL, 1, 1)
-ty_int8 = DataType(TypeKind.K_INT8, 1, 1)
-ty_int16 = DataType(TypeKind.K_INT16, 2, 2)
-ty_int32 = DataType(TypeKind.K_INT32, 4, 4)
-ty_int64 = DataType(TypeKind.K_INT64, 8, 8)
-ty_uint8 = DataType(TypeKind.K_INT8, 1, 1, is_unsigned=True)
-ty_uint16 = DataType(TypeKind.K_INT16, 2, 2, is_unsigned=True)
-ty_uint32 = DataType(TypeKind.K_INT32, 4, 4, is_unsigned=True)
-ty_uint64 = DataType(TypeKind.K_INT64, 8, 8, is_unsigned=True)
-ty_float32 = DataType(TypeKind.K_FLT32, 4, 4)
-ty_float64 = DataType(TypeKind.K_FLT64, 8, 8)
-
-
-def get_ast_type(kind: TypeKind, is_unsigned: bool = False) -> DataType:
-    if kind == TypeKind.K_VOID:
-        return ty_void
-    elif kind == TypeKind.K_BOOL:
-        return ty_bool
-    elif kind == TypeKind.K_FLT32:
-        return ty_float32
-    elif kind == TypeKind.K_FLT64:
-        return ty_float64
-    elif kind == TypeKind.K_INT8:
-        return ty_uint8 if is_unsigned else ty_int8
-    elif kind == TypeKind.K_INT16:
-        return ty_uint16 if is_unsigned else ty_int16
-    elif kind == TypeKind.K_INT32:
-        return ty_uint32 if is_unsigned else ty_int32
-    return ty_uint64 if is_unsigned else ty_int64
-
-
-def cast_node(node: ASTNode, new_type: DataType) -> ASTNode | None:
-    if not node or not new_type:
-        return None
-    # 如果类型已经匹配，不需要转换
-    if node.type == new_type:
-        return node
-    # 创建类型转换节点
-    new_node = ASTNode(
-        op=NodeType.A_CAST,
-        right=node,
-        type=new_type
-    )
-    new_node.rvalue = True
-    return new_node
+    def __init__(self, op: NodeType, left = None, right = None):
+        self.op, self.sym, self.val_type = op, None, None
+        self.left, self.right = left, right

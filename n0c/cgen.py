@@ -1,11 +1,16 @@
 from io import StringIO
 from typing import List
 
-from defs import DataType, TypeKind, Sym, Litval, NodeType, fatal, quote_string
+from defs import ASTNode, Symbol, NodeType, ValType, fatal, quote_string
 from strlits import strlit_processor
 
 
 class CodeGenerator:
+    type_indexes = {
+        "VOID": 0, "BOOL": 1, "INT8": 2, "INT16": 3,
+        "INT32": 4, "INT64": 5, "FLOAT32": 6, "FLOAT64": 7,
+        "UINT8": 10, "UINT16": 11, "UINT32": 12, "UINT64": 13,
+    }
     qbe_type_names = [
         "", "w", "w", "w", "w", "l", "s", "d"
     ]
@@ -21,8 +26,8 @@ class CodeGenerator:
         "", "uw", "uw", "uw", "uw", "ul", "s", "d"
     ]
     arithmetic_ops = {
-        NodeType.A_ADD: "add", NodeType.A_SUBTRACT: "sub",
-        NodeType.A_MULTIPLY: "mul", NodeType.A_DIVIDE: "div",
+        NodeType.A_ADD: "add", NodeType.A_SUB: "sub",
+        NodeType.A_MUL: "mul", NodeType.A_DIV: "div",
     }
     logical_ops = {
         NodeType.A_AND: "and", NodeType.A_OR: "or", NodeType.A_XOR: "xor",
@@ -39,33 +44,30 @@ class CodeGenerator:
         self.next_temp = 1
         self.label_id = 1
 
-    @staticmethod
-    def check_type(val_type: DataType):
-        if val_type.kind.value > TypeKind.K_FLT64.value:
+    def check_type(self, val_type: ValType, unsigned = False) -> int:
+        idx = self.type_indexes.get(val_type.name, -1)
+        if idx < 0:
             fatal("not a built-in type")
-        if val_type.kind == TypeKind.K_VOID:
+        elif idx == 0:
             fatal("no QBE void type")
+        elif not unsigned and idx >= 8:
+            fatal("not support unsigned type")
+        return idx
 
-    def qbe_type(self, val_type: DataType) -> str:
-        self.check_type(val_type)
-        return self.qbe_type_names[val_type.kind.value]
+    def qbe_type(self, val_type: ValType) -> str:
+        idx = self.check_type(val_type)
+        return self.qbe_type_names[idx]
 
-    def qbe_store_type(self, val_type: DataType) -> str:
-        self.check_type(val_type)
-        return self.qbe_store_type_names[val_type.kind.value]
+    def qbe_store_type(self, val_type: ValType) -> str:
+        idx = self.check_type(val_type)
+        return self.qbe_store_type_names[idx]
 
-    def qbe_load_type(self, val_type: DataType) -> str:
-        self.check_type(val_type)
-        idx = val_type.kind.value
-        if val_type.is_unsigned:
-            idx += TypeKind.K_FLT64.value + 1
+    def qbe_load_type(self, val_type: ValType) -> str:
+        idx = self.check_type(val_type, True)
         return self.qbe_load_type_names[idx]
 
-    def qbe_ext_type(self, val_type: DataType) -> str:
-        self.check_type(val_type)
-        idx = val_type.kind.value
-        if val_type.is_unsigned:
-            idx += TypeKind.K_FLT64.value + 1
+    def qbe_ext_type(self, val_type: ValType) -> str:
+        idx = self.check_type(val_type, True)
         return self.qbe_ext_type_names[idx]
 
     def gen_temp(self) -> int:
@@ -86,14 +88,14 @@ class CodeGenerator:
         for strlit in strlit_processor:
             self.cg_strlit(strlit)
 
-    def cg_func_preamble(self, fn_sym: Sym) -> None:
+    def cg_func_preamble(self, fn_sym: Symbol) -> None:
         print(f"export function ${fn_sym.name}(", end="", file=self.output)
         for i, param in enumerate(fn_sym.params):
             if i > 0:
                 print(", ", end="", file=self.output)
-            if param.type.kind == TypeKind.K_VOID:
+            if param.val_type == ValType.VOID:
                 break
-            qtype = self.qbe_type(param.type)
+            qtype = self.qbe_type(param.val_type)
             print(f"{qtype} %{param.name}", end="", file=self.output)
         print(") {", file=self.output)
         print("@START", file=self.output)
@@ -113,8 +115,10 @@ class CodeGenerator:
         # escaped = escaped.replace('\r', '\\r').replace('\t', '\\t').replace('\v', '\\v')
         # escaped = escaped.replace('\\', '\\\\').replace('"', '\\"')
         # print(f"data $L{label} = {{ b \"{escaped}\", b 0 }}", file=self.output)
-        label, value = strlit.label, quote_string(strlit.val)
-        print(f"data $L{label} = {{ b \"{value}\", b 0 }}", file=self.output)
+
+        #label, value = strlit.label, quote_string(strlit.val)
+        label, value = strlit.label, strlit.val
+        print(f"data $L{label} = {{ b {value}, b 0 }}", file=self.output)
 
     def cg_ret(self, node=None):
         if node:
@@ -125,47 +129,47 @@ class CodeGenerator:
     def cg_jump(self, l: int) -> None:
         print(f"  jmp @L{l}", file=self.output)
 
-    def cg_glob_sym(self, s: Sym) -> None:
-        if not s:
+    def cg_glob_sym(self, sym: Symbol) -> None:
+        if not sym:
             return
-        qtype = self.qbe_store_type(s.type)
-        if s.type.kind in (TypeKind.K_FLT32, TypeKind.K_FLT64):
-            prefix, value = qtype + "_", s.init_val.dblval
+        qtype = self.qbe_store_type(sym.val_type)
+        if sym.val_type.is_float():
+            prefix, value = qtype + "_", sym.init_val
         else:
-            prefix, value = "", s.init_val.intval
-        print(f"export data ${s.name} = {{ {qtype} {prefix}{value}, }}", file=self.output)
+            prefix, value = "", sym.init_val
+        print(f"export data ${sym.name} = {{ {qtype} {prefix}{value}, }}", file=self.output)
 
-    def cg_print(self, label: int, temp: int, val_type: DataType) -> None:
+    def cg_print(self, label: int, temp: int, val_type: ValType) -> None:
         qtype = self.qbe_type(val_type)
         print(f"  call $printf(l $L{label}, {qtype} %.t{temp})", file=self.output)
 
-    def cg_load_lit(self, value: Litval, val_type: DataType) -> int:
+    def cg_load_lit(self, node: ASTNode) -> int:
         t = self.gen_temp()
-        qtype = self.qbe_type(val_type)
-        if val_type.kind in (TypeKind.K_FLT32, TypeKind.K_FLT64):
-            print(f"  %.t{t} ={qtype} copy {qtype}_{value.dblval}", file=self.output)
+        qtype = self.qbe_type(node.val_type)
+        if node.val_type.is_float():
+            print(f"  %.t{t} ={qtype} copy {qtype}_{node.number}", file=self.output)
         else:
-            print(f"  %.t{t} ={qtype} copy {value.intval}", file=self.output)
+            print(f"  %.t{t} ={qtype} copy {node.number}", file=self.output)
         return t
 
-    def cg_negate(self, t: int, val_type: DataType) -> int:
+    def cg_negate(self, t: int, val_type: ValType) -> int:
         t_new = self.gen_temp()
         qtype = self.qbe_type(val_type)
         print(f"  %.t{t_new} ={qtype} neg %.t{t}", file=self.output)
         return t_new
 
-    def cg_not(self, t: int, val_type: DataType) -> int:
+    def cg_not(self, t: int, val_type: ValType) -> int:
         t_new = self.gen_temp()
         print(f"  %.t{t_new} =w not %.t{t}", file=self.output)
         return t_new
 
-    def cg_invert(self, t: int, val_type: DataType) -> int:
+    def cg_invert(self, t: int, val_type: ValType) -> int:
         t_new = self.gen_temp()
         qtype = self.qbe_type(val_type)
         print(f"  %.t{t_new} ={qtype} inv %.t{t}", file=self.output)
         return t_new
 
-    def cg_arithmetic(self, op: NodeType, t1: int, t2: int, val_type: DataType) -> int:
+    def cg_arithmetic(self, op: NodeType, t1: int, t2: int, val_type: ValType) -> int:
         op = self.arithmetic_ops.get(op)
         if not op:
             fatal(f"Unknown arithmetic operator {op}")
@@ -176,7 +180,7 @@ class CodeGenerator:
         print(f"  %.t{t_new} =w {op} {qtype} %.t{t1}, %.t{t2}", file=self.output)
         return t_new
 
-    def cg_logical(self, op: NodeType, t1: int, t2: int, val_type: DataType) -> int:
+    def cg_logical(self, op: NodeType, t1: int, t2: int, val_type: ValType) -> int:
         op = self.logical_ops.get(op)
         if not op:
             fatal(f"Unknown logical operator {op}")
@@ -187,7 +191,7 @@ class CodeGenerator:
         print(f"  %.t{t_new} =w {op} {qtype} %.t{t1}, %.t{t2}", file=self.output)
         return t_new
 
-    def cg_comparison(self, op: NodeType, t1: int, t2: int, val_type: DataType) -> int:
+    def cg_comparison(self, op: NodeType, t1: int, t2: int, val_type: ValType) -> int:
         op = self.comparison_ops.get(op)
         if not op:
             fatal(f"Unknown comparison operator {op}")
@@ -199,26 +203,26 @@ class CodeGenerator:
     def cg_if_false(self, t1: int, label: int) -> None:
         print(f"  jz %.t{t1}, @L{label}", file=self.output)
 
-    def cg_add_local(self, val_type: DataType, sym: Sym) -> None:
+    def cg_add_local(self, val_type: ValType, sym: Symbol) -> None:
         qtype = self.qbe_store_type(val_type)
         print(f"  var {qtype} {sym.name}", file=self.output)
 
-    def cg_load_var(self, sym: Sym) -> int:
-        # if sym.type.kind == TypeKind.K_VOID:
+    def cg_load_var(self, sym: Symbol) -> int:
+        # if sym.val_type.kind == TypeKind.K_VOID:
         #     return 0
         t = self.gen_temp()
-        qtype = self.qbe_load_type(sym.type)
+        qtype = self.qbe_load_type(sym.val_type)
         print(f"  %.t{t} ={qtype} load ${sym.name}", file=self.output)
         return t
 
-    def cg_stor_var(self, t: int, exprtype: DataType, sym: Sym) -> None:
-        qtype = self.qbe_store_type(sym.type)
+    def cg_stor_var(self, t: int, exprtype: ValType, sym: Symbol) -> None:
+        qtype = self.qbe_store_type(sym.val_type)
         print(f"  store {qtype} %.t{t}, ${sym.name}", file=self.output)
 
-    def cg_cast(self, t: int, val_type: DataType, newtype: DataType) -> int:
+    def cg_cast(self, t: int, val_type: ValType, newtype: ValType) -> int:
         t_new = self.gen_temp()
-        if val_type.kind in (TypeKind.K_FLT32, TypeKind.K_FLT64):
-            if newtype.kind in (TypeKind.K_FLT32, TypeKind.K_FLT64):
+        if val_type.is_float():
+            if newtype.is_float():
                 qtype = self.qbe_type(newtype)
                 print(f"  %.t{t_new} ={qtype} copy %.t{t}", file=self.output)
             else:
@@ -226,7 +230,7 @@ class CodeGenerator:
                 new_qtype = self.qbe_type(newtype)
                 print(f"  %.t{t_new} ={new_qtype} trunc {qtype} %.t{t}", file=self.output)
         else:
-            if newtype.kind in (TypeKind.K_FLT32, TypeKind.K_FLT64):
+            if newtype.is_float():
                 qtype = self.qbe_type(val_type)
                 new_qtype = self.qbe_type(newtype)
                 print(f"  %.t{t_new} ={new_qtype} extend {qtype} %.t{t}", file=self.output)
@@ -236,7 +240,7 @@ class CodeGenerator:
                 print(f"  %.t{t_new} ={new_qtype} {qtype} %.t{t}", file=self.output)
         return t_new
 
-    def cg_call(self, sym: Sym, numargs: int, arglist: List[int], typelist: List[DataType]) -> int:
+    def cg_call(self, sym: Symbol, numargs: int, arglist: List[int], typelist: List[ValType]) -> int:
         t = self.gen_temp()
         args = []
         for i in range(numargs):

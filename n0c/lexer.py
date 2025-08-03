@@ -1,11 +1,8 @@
 import sys
 
-from defs import TokType, OpType, Token, fatal
+from defs import TokType, OpCode, Token, fatal, create_keyword_token
 
-TextMaxLen = 512
-IdentMaxLen = 100
 NumberMaxLen = 30
-KeywordMaxLen = 7
 OperatorMaxLen = 3
 
 
@@ -13,30 +10,30 @@ class Lexer:
     delimiters = {"(%": "%)", "%%": "\n", "'": "'",
                   "\"": "\"", "\"\"\"": "\"\"\""}
     operators = {
-        '!': [("!=", OpType.NE), ("!", OpType.NOT)],
-        '$': [("$", OpType.DOLLAR)],
-        '%': [("%=", OpType.MOD_AS), ("%", OpType.MOD)],
-        '&': [("&&", OpType.LOG_AND), ("&", OpType.AND)],
-        '(': [("(", OpType.LPAREN)],
-        ')': [(")", OpType.RPAREN)],
-        '*': [("*=", OpType.MUL_AS), ("**", OpType.POW), ("*", OpType.MUL)],
-        '+': [("+=", OpType.ADD_AS), ("+", OpType.ADD)],
-        ',': [(",", OpType.COMMA)],
-        '-': [("-=", OpType.SUB_AS), ("-", OpType.SUB)],
-        '.': [("..=", OpType.RANGE_TOP), ("...", OpType.ELLIPSES),
-              ("..", OpType.RANGE), (".", OpType.DOT)],
-        '/': [("/=", OpType.DIV_AS), ("//", OpType.QUO), ("/", OpType.DIV)],
-        ':': [(":=", OpType.UNPACK), (":", OpType.COLON)],
-        ';': [(";", OpType.SEMI)],
-        '<': [("<=", OpType.LE), ("<<", OpType.LSHIFT), ("<", OpType.LT)],
-        '=': [("==", OpType.EQ), ("=", OpType.ASSIGN)],
-        '>': [(">>", OpType.RSHIFT), (">=", OpType.GE), (">", OpType.GT)],
-        '^': [("^", OpType.XOR)],
-        '_': [("_", OpType.IT)],
-        '{': [("{", OpType.LBRACE)],
-        '|': [("||", OpType.LOG_OR), ("|", OpType.OR)],
-        '}': [("}", OpType.RBRACE)],
-        '~': [("~", OpType.INVERT)],
+        '!': [("!=", OpCode.NE), ("!", OpCode.NOT)],
+        '$': [("$", OpCode.DOLLAR)],
+        '%': [("%=", OpCode.MOD_AS), ("%", OpCode.MOD)],
+        '&': [("&&", OpCode.LOG_AND), ("&", OpCode.AND)],
+        '(': [("(", OpCode.LPAREN)],
+        ')': [(")", OpCode.RPAREN)],
+        '*': [("*=", OpCode.MUL_AS), ("**", OpCode.POW), ("*", OpCode.MUL)],
+        '+': [("+=", OpCode.ADD_AS), ("+", OpCode.ADD)],
+        ',': [(",", OpCode.COMMA)],
+        '-': [("-=", OpCode.SUB_AS), ("-", OpCode.SUB)],
+        '.': [("..=", OpCode.RANGE_TOP), ("...", OpCode.ELLIPSES),
+              ("..", OpCode.RANGE), (".", OpCode.DOT)],
+        '/': [("/=", OpCode.DIV_AS), ("//", OpCode.QUO), ("/", OpCode.DIV)],
+        ':': [(":=", OpCode.UNPACK), (":", OpCode.COLON)],
+        ';': [(";", OpCode.SEMI)],
+        '<': [("<=", OpCode.LE), ("<<", OpCode.LSHIFT), ("<", OpCode.LT)],
+        '=': [("==", OpCode.EQ), ("=", OpCode.ASSIGN)],
+        '>': [(">>", OpCode.RSHIFT), (">=", OpCode.GE), (">", OpCode.GT)],
+        '^': [("^", OpCode.XOR)],
+        '_': [("_", OpCode.IT)],
+        '{': [("{", OpCode.LBRACE)],
+        '|': [("||", OpCode.LOG_OR), ("|", OpCode.OR)],
+        '}': [("}", OpCode.RBRACE)],
+        '~': [("~", OpCode.INVERT)],
     }
     keywords = {
         'a': ["any", "atom"],
@@ -44,7 +41,7 @@ class Lexer:
         'd': ["def"],
         'e': ["enum", "else"],
         'f': ["for", "fn", "float64", "float32", "false"],
-        'i': ["int8", "int64", "int32", "int16", "if"],
+        'i': ["int8", "int64", "int32", "int16", "in", "if"],
         'l': ["let"],
         'm': ["match"],
         'n': ["null"],
@@ -145,7 +142,7 @@ class Lexer:
             pos = i + len(delim)
             temp, self.buf = self.buf[:pos], self.buf[pos:]
             if delim in ("\n", "%)"):
-                token = Token(TokType.T_COMMENT, temp.rstrip())
+                token = Token(TokType.T_COMMENT, temp.strip())
             else:
                 token = Token(TokType.T_STRING, temp)
             token.line_no = self.line_no
@@ -215,7 +212,7 @@ class Lexer:
             return None
         for word in words:
             if self.buf.startswith(word):
-                token = Token(TokType.T_KEYWORD, word)
+                token = create_keyword_token(word)
                 token.line_no = self.line_no
                 self.buf = self.buf[len(word):]
                 return token
@@ -252,7 +249,7 @@ class TokenQueue:
     def curr_token(self):
         if 0 <= self.offset < len(self.tokens):
             return self.tokens[self.offset]
-        return None
+        return Token(TokType.T_EOF)
 
     def next_token(self):
         self.offset += 1

@@ -1,13 +1,13 @@
 from typing import Optional
 
-from defs import ASTNode, NodeType, DataType, SymType, fatal
+from defs import ASTNode, NodeType, ValType, SymType, fatal, is_arithmetic, is_logical, is_comparison
 from cgen import codegen, gen_label, cg_negate, cg_not, cg_invert
 from strlits import get_strlit_label
 
 
 class ASTCodeGenerator:
     unary_ops = {
-        NodeType.A_NEGATE: cg_negate,
+        NodeType.A_SUB: cg_negate,
         NodeType.A_NOT: cg_not,
         NodeType.A_INVERT: cg_invert,
     }
@@ -18,8 +18,8 @@ class ASTCodeGenerator:
             return 0
 
         # 根据节点类型生成相应的代码
-        if node.op == NodeType.A_NUMLIT:
-            return codegen.cg_load_lit(node.numlit, node.type)
+        if node.op == NodeType.A_VALUE and node.string == "":
+            return codegen.cg_load_lit(node)
         elif node.op == NodeType.A_IDENT:
             return codegen.cg_load_var(node.sym)
         elif node.op == NodeType.A_ASSIGN:
@@ -28,20 +28,17 @@ class ASTCodeGenerator:
             return right_temp
         elif node.op == NodeType.A_CAST:
             right_temp = cls.gen_ast(node.right)
-            return codegen.cg_cast(right_temp, node.right.type, node.type)
-        elif node.op in (NodeType.A_NEGATE, NodeType.A_NOT, NodeType.A_INVERT):
+            return codegen.cg_cast(right_temp, node.right.type, node.val_type)
+        elif node.op in (NodeType.A_SUB, NodeType.A_NOT, NodeType.A_INVERT):
             return cls.gen_unary(node)
-        elif node.op in (NodeType.A_ADD, NodeType.A_SUBTRACT,
-                         NodeType.A_MULTIPLY, NodeType.A_DIVIDE):
+        elif is_arithmetic(node.op.value):
             return cls.gen_arithmetic(node)
-        elif node.op in (NodeType.A_AND, NodeType.A_OR, NodeType.A_XOR,
-                         NodeType.A_LSHIFT, NodeType.A_RSHIFT):
+        elif is_logical(node.op.value):
             return cls.gen_logical(node)
-        elif node.op in (NodeType.A_EQ, NodeType.A_NE, NodeType.A_LE,
-                         NodeType.A_LT, NodeType.A_GE, NodeType.A_GT):
+        elif is_comparison(node.op.value):
             return cls.gen_comparison(node)
         elif node.op == NodeType.A_LOCAL:
-            codegen.cg_add_local(node.type, node.sym)
+            codegen.cg_add_local(node.val_type, node.sym)
             if node.left:
                 expr_temp = cls.gen_ast(node.left)
                 codegen.cg_stor_var(expr_temp, node.left.type, node.sym)
@@ -52,7 +49,7 @@ class ASTCodeGenerator:
             return cls.gen_while(node)
         elif node.op == NodeType.A_FOR:
             return cls.gen_for(node)
-        elif node.op == NodeType.A_FUNCCALL:
+        elif node.op == NodeType.A_CALL:
             return cls.gen_func_call(node)
         elif node.op == NodeType.A_RETURN:
             expr_temp = cls.gen_ast(node.left)
@@ -66,7 +63,7 @@ class ASTCodeGenerator:
                 last_temp = cls.gen_ast(stmt_node)
                 stmt_node = stmt_node.right
             return last_temp
-        elif node.op in (NodeType.A_PRINT, NodeType.A_PRINTF):
+        elif node.op == NodeType.A_PRINTF:
             expr_temp = cls.gen_ast(node.right)
             # 根据类型选择合适的格式字符串
             # if is_integer(node.left.type):
@@ -75,8 +72,8 @@ class ASTCodeGenerator:
             #     label = get_strlit_label("%f\n")
             # else:
             #     fatal(f"Unsupported type for print: {node.left.type}")
-            label = get_strlit_label(node.left.strlit)
-            codegen.cg_print(label, expr_temp, node.right.type)
+            label = get_strlit_label(node.left.string)
+            codegen.cg_print(label, expr_temp, node.right.val_type)
             return 0
         elif node.op == NodeType.A_GLUE:
             cls.gen_ast(node.left)
@@ -90,22 +87,22 @@ class ASTCodeGenerator:
     def gen_unary(cls, node: ASTNode) -> int:
         op = cls.unary_ops.get(node.op)
         rt = cls.gen_ast(node.right)
-        return op(rt, node.type)
+        return op(rt, node.val_type)
 
     @classmethod
     def gen_arithmetic(cls, node: ASTNode) -> int:
         lt, rt = cls.gen_ast(node.left), cls.gen_ast(node.right)
-        return codegen.cg_arithmetic(node.op, lt, rt, node.type)
+        return codegen.cg_arithmetic(node.op, lt, rt, node.val_type)
 
     @classmethod
     def gen_logical(cls, node: ASTNode) -> int:
         lt, rt = cls.gen_ast(node.left), cls.gen_ast(node.right)
-        return codegen.cg_logical(node.op, lt, rt, node.type)
+        return codegen.cg_logical(node.op, lt, rt, node.val_type)
 
     @classmethod
     def gen_comparison(cls, node: ASTNode) -> int:
         lt, rt = cls.gen_ast(node.left), cls.gen_ast(node.right)
-        return codegen.cg_comparison(node.op, lt, rt, node.type)
+        return codegen.cg_comparison(node.op, lt, rt, node.val_type)
 
     @classmethod
     def gen_if(cls, node: ASTNode) -> int:
@@ -162,12 +159,12 @@ class ASTCodeGenerator:
             fatal(f"{node.sym.name if node.sym else '?'} is not a function")
         # 处理参数
         args: list[int] = []
-        arg_types: list[DataType] = []
+        arg_types: list[ValType] = []
         arg_node = node.left
         while arg_node:
             arg_temp = cls.gen_ast(arg_node)
             args.append(arg_temp)
-            arg_types.append(arg_node.type)
+            arg_types.append(arg_node.val_type)
             arg_node = arg_node.right
         # 调用函数
         return codegen.cg_call(node.sym, len(args), args, arg_types)

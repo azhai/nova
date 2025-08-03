@@ -1,6 +1,6 @@
 from typing import Optional, Dict
 
-from defs import DataType, TypeKind, Litval, TokType, fatal, NodeType, SymType, ASTNode, cast_node
+from defs import TokType, fatal, NodeType, SymType, ASTNode
 
 
 class TypeProcessor:
@@ -128,7 +128,7 @@ class TypeProcessor:
         elif NodeType.A_AND <= node.op <= NodeType.A_INVERT: # 二元运算类型
             if node.right and node.right.type:
                 node.type = node.right.type
-        elif node.op == NodeType.A_FUNCCALL: # 函数调用类型
+        elif node.op == NodeType.A_CALL: # 函数调用类型
             if node.sym and node.sym.sym_type == SymType.S_FUNC:
                 node.type = node.sym.type
         return node
