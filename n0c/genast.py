@@ -1,7 +1,7 @@
 from typing import Optional
 
-from defs import ASTNode, NodeType, ValType, SymType, fatal, is_arithmetic, is_logical, is_comparison
 from cgen import codegen, gen_label, cg_negate, cg_not, cg_invert
+from defs import ASTNode, NodeType, ValType, SymType, fatal, is_arithmetic, is_logical, is_comparison
 from strlits import get_strlit_label
 
 

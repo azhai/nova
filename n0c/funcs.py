@@ -1,9 +1,9 @@
 from typing import List
 
 from cgen import codegen
-from defs import Symbol, SymType, ValType, ASTNode, NodeType, fatal
+from defs import Symbol, SymType, ASTNode, NodeType, fatal
 from genast import gen_ast
-from syms import add_symbol, find_symbol, set_cur_func
+from syms import find_symbol
 
 
 def add_function(node: ASTNode, params: List[Symbol]) -> Symbol:

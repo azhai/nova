@@ -233,7 +233,7 @@ class Lexer:
 
 
 class TokenQueue:
-    tokens: list[Token] = []
+    tokens = []
     offset: int = 0
 
     def __init__(self, it = None):

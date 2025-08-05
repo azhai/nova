@@ -1,13 +1,13 @@
-from typing import List
+from typing import List, Optional
 
 from defs import (
     NodeType, ValType, TokType, SymType, OpCode, Keyword,
     Token, Symbol, ASTNode, fatal
 )
-from lexer import Lexer, TokenQueue
-from syms import Scope
 from funcs import add_function, declare_function, gen_func_statement_block
+from lexer import Lexer, TokenQueue
 from stmts import cast_node, binary_op, gen_stat_declare
+from syms import Scope
 
 
 class Parser:
@@ -18,7 +18,7 @@ class Parser:
         self.queue = TokenQueue(lexer.scan())
         self.scope = Scope()
 
-    def next_token(self) -> Token|None:
+    def next_token(self) -> Optional[Token]:
         tk = self.queue.next_token()
         while True:
             if tk.tok_type not in (TokType.T_COMMENT, TokType.T_WHITESPACE):
@@ -73,12 +73,12 @@ class Parser:
     def rparen(self, throw: bool = True) -> int:
         return self.match_ops(OpCode.RPAREN, throw=throw)
 
-    def parse_program(self) -> ASTNode | None:
+    def parse_program(self) -> Optional[ASTNode]:
         if self.queue is None:
             fatal("Lexer or TokenQueue is not initialized")
         return self.function_declarations()
 
-    def function_declarations(self) -> ASTNode | None:
+    def function_declarations(self) -> Optional[ASTNode]:
         """
         function_declarations= function_declaration*
         """
@@ -181,7 +181,7 @@ class Parser:
         #     last = stmt
         return node
 
-    def procedural_stmt(self) -> ASTNode | None:
+    def procedural_stmt(self) -> Optional[ASTNode]:
         """
         解析单个过程语句，可能返回None
         procedural_stmt= ( print_stmt
@@ -221,7 +221,7 @@ class Parser:
         self.next_token()
         return curr.text
 
-    def get_id(self, type_str: str) -> ASTNode|None:
+    def get_id(self, type_str: str) -> Optional[ASTNode]:
         curr = self.queue.curr_token()
         if curr.tok_type != TokType.T_IDENT:
             return None
@@ -234,7 +234,7 @@ class Parser:
         )
         return node
 
-    def statement_block(self) -> ASTNode | None:
+    def statement_block(self) -> Optional[ASTNode]:
         """
         statement_block= LBRACE procedural_stmt* RBRACE
                        | LBRACE declaration_stmt* procedural_stmt* RBRACE
@@ -475,7 +475,7 @@ class Parser:
             left = binary_op(left, op, self.factor())
         return left
 
-    def factor(self) -> ASTNode | None:
+    def factor(self) -> Optional[ASTNode]:
         """
         factor= NUMLIT
               | TRUE

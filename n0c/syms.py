@@ -140,7 +140,6 @@ class SymTable:
             return sym
 
         # 创建新的标识符符号（默认为变量类型）
-        from typs import get_type
         sym = Symbol(
             name=name,
             sym_type=SymType.S_VAR,

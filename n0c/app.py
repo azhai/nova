@@ -2,33 +2,32 @@
 
 """
 - 创建了核心数据结构文件：
-- `alic.py` ：定义了编译器所需的枚举、类型和全局变量
+- `defs.py` ：定义了编译器所需的枚举、类型和全局变量
 
 - 实现了编译器各模块：
 - `lexer.py` ：词法分析器
 - `parser.py` ：语法分析器
 - `nodes.py` ：AST节点操作
 - `cgen.py` ：QBE代码生成器
-- `expr.py` ：表达式处理
 - `funcs.py` ：函数处理
-- `typs.py` ：类型系统
 - `stmts.py` ：语句处理
 - `syms.py` ：符号表管理
 - `genast.py` ：AST代码生成
 - `strlits.py` ：字符串字面量管理
 
 - 创建了编译器入口文件：
-- `main.py` ：实现命令行参数解析和编译流程控制
+- `app.py` ：实现命令行参数解析和编译流程控制
 """
 
 import argparse
+from typing import Optional
 
+from cgen import codegen
 from defs import ASTNode, Output
 from lexer import Lexer
+from nodes import dump_ast, free_ast
 from parser import Parser
 from syms import gen_global_syms
-from cgen import codegen
-from nodes import dump_ast, free_ast
 
 
 def main():
@@ -62,7 +61,7 @@ def main():
     return
 
 
-def parse_program(filename: str, output: Output) -> ASTNode | None:
+def parse_program(filename: str, output: Output) -> Optional[ASTNode]:
     lexer = Lexer(filename)
     parser = Parser(lexer)
     print("\nTokens in {}:".format(filename), file=output.log)

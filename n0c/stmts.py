@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Union
 
 from defs import (
     ASTNode, NodeType, ValType, Symbol, SymType, fatal,
@@ -12,7 +12,7 @@ def binary_op(left: ASTNode, op: NodeType, right: ASTNode) -> ASTNode:
     return adjust_binary_node(node)
 
 
-def cast_node(node: ASTNode, new_type: ValType) -> ASTNode | None:
+def cast_node(node: ASTNode, new_type: ValType) -> Optional[ASTNode]:
     if not node or not new_type:
         return None
     if node.val_type == new_type:
@@ -54,7 +54,7 @@ def adjust_binary_node(node: ASTNode, force = False) -> ASTNode:
     return node
 
 
-def widen_type(t1, t2: ValType) -> ValType|None:
+def widen_type(t1, t2: ValType) -> Optional[ValType]:
     if t1 == t2:
         return t1
     if t1 in (ValType.VOID, ValType.BOOL):
@@ -112,7 +112,7 @@ def set_int_node(node: ASTNode, force = False) -> ASTNode:
     return node
 
 
-def parse_number(num: str) -> int|float:
+def parse_number(num: str) -> Union[int, float]:
     if num.startswith('0x') or num.startswith('0X'):
         return int(num, 16)
     elif num.startswith('0') and len(num) > 1:

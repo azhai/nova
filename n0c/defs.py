@@ -1,5 +1,9 @@
 import sys
-from enum import IntEnum, StrEnum
+if sys.version_info >= (3, 11):
+    from enum import IntEnum, StrEnum
+else:
+    from enum_v3_11 import IntEnum, StrEnum
+from typing import Optional
 
 
 def fatal(msg: str):
@@ -302,8 +306,8 @@ class NodeType(IntEnum):
 
 class ASTNode:
     op: NodeType
-    sym: Symbol|None
-    val_type: ValType|None
+    sym: Optional[Symbol]
+    val_type: Optional[ValType]
     left, right, other = None, None, None
     number, string = 0, ""
 

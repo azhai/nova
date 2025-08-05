@@ -1,7 +1,7 @@
 from io import StringIO
 from typing import List
 
-from defs import ASTNode, Symbol, NodeType, ValType, fatal, quote_string
+from defs import ASTNode, Symbol, NodeType, ValType, fatal
 from strlits import strlit_processor
 
 
