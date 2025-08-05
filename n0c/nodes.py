@@ -1,8 +1,7 @@
 import sys
 from typing import Optional
 
-from defs import ASTNode, NodeType, fatal, quote_string
-from n0c.defs import ValType
+from defs import ASTNode, NodeType, ValType, fatal, quote_string
 
 
 def free_ast(node: Optional[ASTNode]) -> None:
