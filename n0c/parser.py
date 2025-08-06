@@ -1,3 +1,7 @@
+"""
+// Note: You can grep '//-' this file to extract the grammar
+"""
+
 from typing import List, Optional
 
 from defs import (
@@ -80,7 +84,7 @@ class Parser:
 
     def function_declarations(self) -> Optional[ASTNode]:
         """
-        function_declarations= function_declaration*
+        //- function_declarations= function_declaration*
         """
         node = None
         while not self.is_eof():
@@ -89,8 +93,8 @@ class Parser:
 
     def function_declaration(self) -> ASTNode:
         """
-        function_declaration= function_prototype statement_block
-                            | function_prototype SEMI
+        //- function_declaration= function_prototype statement_block
+        //-                     | function_prototype SEMI
         """
         node, params = self.function_prototype()
         if self.semi(False):
@@ -106,8 +110,8 @@ class Parser:
 
     def function_prototype(self) -> (ASTNode, List[Symbol]):
         """
-        function_prototype= typed_declaration LPAREN typed_declaration_list RPAREN
-                          | typed_declaration LPAREN VOID RPAREN
+        //- function_prototype= typed_declaration LPAREN typed_declaration_list RPAREN
+        //-                   | typed_declaration LPAREN VOID RPAREN
         """
         node, params = self.typed_declaration(), []
         self.lparen()
@@ -118,7 +122,7 @@ class Parser:
 
     def typed_declaration_list(self) -> (ASTNode, List[Symbol]):
         """
-        typed_declaration_list= typed_declaration (COMMA typed_declaration_list)*
+        //- typed_declaration_list= typed_declaration (COMMA typed_declaration_list)*
         """
         first = self.typed_declaration()
         node, sym_list = first, [first.sym, ]
@@ -131,7 +135,7 @@ class Parser:
 
     def typed_declaration(self) -> ASTNode:
         """
-        typed_declaration= type IDENT
+        //- typed_declaration= type IDENT
         """
         type_obj = self.get_type()
         node = self.get_id(type_obj)
@@ -139,7 +143,7 @@ class Parser:
 
     def declaration_stmts(self) -> ASTNode:
         """
-        declaration_stmts= (typed_declaration ASSIGN expression SEMI)+
+        //- declaration_stmts= (typed_declaration ASSIGN expression SEMI)+
         """
         node, last = None, None
         while True:
@@ -160,7 +164,7 @@ class Parser:
 
     def procedural_stmts(self) -> ASTNode:
         """
-        procedural_stmts= procedural_stmt*
+        //- procedural_stmts= procedural_stmt*
         """
         node, last = None, None
         while True:
@@ -184,13 +188,13 @@ class Parser:
     def procedural_stmt(self) -> Optional[ASTNode]:
         """
         解析单个过程语句，可能返回None
-        procedural_stmt= ( print_stmt
-                         | assign_stmt
-                         | if_stmt
-                         | while_stmt
-                         | for_stmt
-                         | function_call
-                         )
+        //- procedural_stmt= ( print_stmt
+        //-                  | assign_stmt
+        //-                  | if_stmt
+        //-                  | while_stmt
+        //-                  | for_stmt
+        //-                  | function_call
+        //-                  )
         """
         curr = self.queue.curr_token()
         if curr.tok_type == TokType.T_OPERATOR and curr.value == OpCode.RBRACE:
@@ -213,7 +217,7 @@ class Parser:
 
     def get_type(self) -> str:
         """
-        type= built-in type | user-defined type
+        //- type= built-in type | user-defined type
         """
         curr = self.queue.curr_token()
         if curr.tok_type != TokType.T_KEYWORD:
@@ -236,8 +240,8 @@ class Parser:
 
     def statement_block(self) -> Optional[ASTNode]:
         """
-        statement_block= LBRACE procedural_stmt* RBRACE
-                       | LBRACE declaration_stmt* procedural_stmt* RBRACE
+        //- statement_block= LBRACE procedural_stmt* RBRACE
+        //-                | LBRACE declaration_stmt* procedural_stmt* RBRACE
         """
         self.lbrace()
         if self.rbrace(False):
@@ -269,7 +273,7 @@ class Parser:
 
     def assign_stmt(self) -> ASTNode:
         """
-        assign_stmt= variable ASSIGN expression SEMI
+        //- assign_stmt= variable ASSIGN expression SEMI
         """
         left = self.expression()
         self.match_ops(OpCode.ASSIGN)
@@ -282,8 +286,8 @@ class Parser:
 
     def if_stmt(self) -> ASTNode:
         """
-        if_stmt= IF LPAREN relational_expression RPAREN statement_block
-                 (ELSE statement_block)?
+        //- if_stmt= IF LPAREN relational_expression RPAREN statement_block
+        //-          (ELSE statement_block)?
         """
         self.match_kw(Keyword.IF)
         self.lparen()
@@ -301,7 +305,7 @@ class Parser:
 
     def while_stmt(self) -> ASTNode:
         """
-        while_stmt= WHILE LPAREN relational_expression RPAREN statement_block
+        //- while_stmt= WHILE LPAREN relational_expression RPAREN statement_block
         """
         self.match_kw(Keyword.WHILE)
         self.lparen()
@@ -315,8 +319,8 @@ class Parser:
 
     def for_stmt(self) -> ASTNode:
         """
-        for_stmt= FOR LPAREN assign_stmt relational_expression SEMI
-                  short_assign_stmt RPAREN statement_block
+        //- for_stmt= FOR LPAREN assign_stmt relational_expression SEMI
+        //-           short_assign_stmt RPAREN statement_block
         """
         self.match_kw(Keyword.FOR)
         self.lparen()
@@ -332,7 +336,7 @@ class Parser:
 
     def function_call(self) -> ASTNode:
         """
-        function_call= IDENT LPAREN expression_list? RPAREN SEMI
+        //- function_call= IDENT LPAREN expression_list? RPAREN SEMI
         """
         func_name = self.queue.curr_token().text
         self.match_type(TokType.T_IDENT)
@@ -346,7 +350,7 @@ class Parser:
 
     def expression_list(self) -> ASTNode:
         """
-        expression_list= expression (COMMA expression_list)*
+        //- expression_list= expression (COMMA expression_list)*
         """
         expr = self.expression()
         node = ASTNode(NodeType.A_GLUE, left=expr)
@@ -357,20 +361,20 @@ class Parser:
 
     def expression(self) -> ASTNode:
         """
-        expression= bitwise_expression
+        //- expression= bitwise_expression
         """
         node = self.bitwise_expression()
         return node
 
     def bitwise_expression(self) -> ASTNode:
         """
-        bitwise_expression= ( INVERT relational_expression
-                            |        relational_expression
-                            )
-                            ( AND relational_expression
-                            | OR  relational_expression
-                            | XOR relational_expression
-                            )*
+        //- bitwise_expression= ( INVERT relational_expression
+        //-                     |        relational_expression
+        //-                     )
+        //-                     ( AND relational_expression
+        //-                     | OR  relational_expression
+        //-                     | XOR relational_expression
+        //-                     )*
         """
         invert = self.match_ops(OpCode.INVERT)
         left = self.relational_expression()
@@ -387,16 +391,16 @@ class Parser:
 
     def relational_expression(self) -> ASTNode:
         """
-        relational_expression= ( NOT shift_expression
-                               |     shift_expression
-                               )
-                               ( GE shift_expression
-                               | GT shift_expression
-                               | LE shift_expression
-                               | LT shift_expression
-                               | EQ shift_expression
-                               | NE shift_expression
-                               )?
+        //- relational_expression= ( NOT shift_expression
+        //-                        |     shift_expression
+        //-                        )
+        //-                        ( GE shift_expression
+        //-                        | GT shift_expression
+        //-                        | LE shift_expression
+        //-                        | LT shift_expression
+        //-                        | EQ shift_expression
+        //-                        | NE shift_expression
+        //-                        )?
         """
         log_not = self.match_ops(OpCode.NOT)
         left = self.shift_expression()
@@ -413,10 +417,10 @@ class Parser:
 
     def shift_expression(self) -> ASTNode:
         """
-        shift_expression= additive_expression
-                        ( LSHIFT additive_expression
-                        | RSHIFT additive_expression
-                        )*
+        //- shift_expression= additive_expression
+        //-                 ( LSHIFT additive_expression
+        //-                 | RSHIFT additive_expression
+        //-                 )*
         """
         left = self.additive_expression()
         while True:
@@ -430,17 +434,17 @@ class Parser:
 
     def additive_expression(self) -> ASTNode:
         """
-        additive_expression= ( PLUS? multiplicative_expression
-                             | MINUS multiplicative_expression
-                             )
-                             ( PLUS  multiplicative_expression
-                             | MINUS multiplicative_expression
-                             )*
+        //- additive_expression= ( PLUS? multiplicative_expression
+        //-                      | MINUS multiplicative_expression
+        //-                      )
+        //-                      ( PLUS  multiplicative_expression
+        //-                      | MINUS multiplicative_expression
+        //-                      )*
         """
         negate = self.match_ops(OpCode.SUB)
         left = self.multiplicative_expression()
         if negate:
-            left = ASTNode(NodeType.A_SUB, right=left)
+            left = ASTNode(NodeType.A_NEG, right=left)
         while True:
             code = self.match_ops(OpCode.ADD, OpCode.SUB)
             if code == OpCode.NOOP:
@@ -452,19 +456,19 @@ class Parser:
 
     def multiplicative_expression(self) -> ASTNode:
         """
-        multiplicative_expression= l:factor
-                                 ( STAR  factor
-                                 | SLASH factor
-                                 )*
+        //- multiplicative_expression= l:factor
+        //-                          ( STAR  factor
+        //-                          | SLASH factor
+        //-                          )*
 
-        multiplicative_expression= ( STAR? unary_expression
-                                    | SLASH unary_expression
-                                    | PERCENT unary_expression
-                                    )
-                                    ( STAR  unary_expression
-                                    | SLASH unary_expression
-                                    | PERCENT unary_expression
-                                    )*
+        //- multiplicative_expression= ( STAR? unary_expression
+        //-                             | SLASH unary_expression
+        //-                             | PERCENT unary_expression
+        //-                             )
+        //-                             ( STAR  unary_expression
+        //-                             | SLASH unary_expression
+        //-                             | PERCENT unary_expression
+        //-                             )*
         """
         left = self.factor()
         while True:
@@ -477,10 +481,10 @@ class Parser:
 
     def factor(self) -> Optional[ASTNode]:
         """
-        factor= NUMLIT
-              | TRUE
-              | FALSE
-              | variable
+        //- factor= NUMLIT
+        //-       | TRUE
+        //-       | FALSE
+        //-       | variable
         """
         curr = self.queue.curr_token()
         if curr.tok_type == TokType.T_IDENT:
@@ -523,7 +527,7 @@ class Parser:
 
     def variable(self) -> ASTNode:
         """
-        variable= IDENT
+        //- variable= IDENT
         """
         curr = self.queue.curr_token()
         self.match_type(TokType.T_IDENT)

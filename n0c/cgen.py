@@ -35,8 +35,8 @@ class CodeGenerator:
     }
     comparison_ops = {
         NodeType.A_EQ: "eq", NodeType.A_NE: "ne",
-        NodeType.A_LE: "le", NodeType.A_LT: "lt",
-        NodeType.A_GE: "ge", NodeType.A_GT: "gt",
+        NodeType.A_LE: "sle", NodeType.A_LT: "slt",
+        NodeType.A_GE: "sge", NodeType.A_GT: "sgt",
     }
 
     def __init__(self):
@@ -153,21 +153,19 @@ class CodeGenerator:
         return t
 
     def cg_negate(self, t: int, val_type: ValType) -> int:
-        t_new = self.gen_temp()
         qtype = self.qbe_type(val_type)
-        print(f"  %.t{t_new} ={qtype} neg %.t{t}", file=self.output)
-        return t_new
+        print(f"  %.t{t} ={qtype} sub 0, %.t{t}", file=self.output)
+        return t
 
     def cg_not(self, t: int, val_type: ValType) -> int:
-        t_new = self.gen_temp()
-        print(f"  %.t{t_new} =w not %.t{t}", file=self.output)
-        return t_new
+        qtype = self.qbe_type(val_type)
+        print(f"  %.t{t} ={qtype} ceq{qtype} %.t{t}, 0", file=self.output)
+        return t
 
     def cg_invert(self, t: int, val_type: ValType) -> int:
-        t_new = self.gen_temp()
         qtype = self.qbe_type(val_type)
-        print(f"  %.t{t_new} ={qtype} inv %.t{t}", file=self.output)
-        return t_new
+        print(f"  %.t{t} ={qtype} xor %.t{t}, -1", file=self.output)
+        return t
 
     def cg_arithmetic(self, op: NodeType, t1: int, t2: int, val_type: ValType) -> int:
         op = self.arithmetic_ops.get(op)
@@ -175,10 +173,9 @@ class CodeGenerator:
             fatal(f"Unknown arithmetic operator {op}")
         if op == "div" and val_type.is_unsigned:
             op = "divu"
-        t_new = self.gen_temp()
         qtype = self.qbe_type(val_type)
-        print(f"  %.t{t_new} =w {op} {qtype} %.t{t1}, %.t{t2}", file=self.output)
-        return t_new
+        print(f"  %.t{t1} ={qtype} {op} %.t{t1}, %.t{t2}", file=self.output)
+        return t1
 
     def cg_logical(self, op: NodeType, t1: int, t2: int, val_type: ValType) -> int:
         op = self.logical_ops.get(op)
@@ -186,18 +183,19 @@ class CodeGenerator:
             fatal(f"Unknown logical operator {op}")
         if op == "shr" and val_type.is_unsigned:
             op = "shru"
-        t_new = self.gen_temp()
         qtype = self.qbe_type(val_type)
-        print(f"  %.t{t_new} =w {op} {qtype} %.t{t1}, %.t{t2}", file=self.output)
-        return t_new
+        print(f"  %.t{t1} ={qtype} {op} %.t{t1}, %.t{t2}", file=self.output)
+        return t1
 
     def cg_comparison(self, op: NodeType, t1: int, t2: int, val_type: ValType) -> int:
         op = self.comparison_ops.get(op)
         if not op:
             fatal(f"Unknown comparison operator {op}")
+        if val_type.is_unsigned:
+            op = op.replace("s", "", 1)
         t_new = self.gen_temp()
         qtype = self.qbe_type(val_type)
-        print(f"  %.t{t_new} =w {op} {qtype} %.t{t1}, %.t{t2}", file=self.output)
+        print(f"  %.t{t_new} =w c{op}{qtype} %.t{t1}, %.t{t2}", file=self.output)
         return t_new
 
     def cg_if_false(self, t1: int, label: int) -> None:

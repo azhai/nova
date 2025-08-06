@@ -7,7 +7,7 @@ from strlits import get_strlit_label
 
 class ASTCodeGenerator:
     unary_ops = {
-        NodeType.A_SUB: cg_negate,
+        NodeType.A_NEG: cg_negate,
         NodeType.A_NOT: cg_not,
         NodeType.A_INVERT: cg_invert,
     }
@@ -29,7 +29,7 @@ class ASTCodeGenerator:
         elif node.op == NodeType.A_CAST:
             right_temp = cls.gen_ast(node.right)
             return codegen.cg_cast(right_temp, node.right.type, node.val_type)
-        elif node.op in (NodeType.A_SUB, NodeType.A_NOT, NodeType.A_INVERT):
+        elif node.op in (NodeType.A_NEG, NodeType.A_NOT, NodeType.A_INVERT):
             return cls.gen_unary(node)
         elif is_arithmetic(node.op.value):
             return cls.gen_arithmetic(node)
