@@ -97,13 +97,10 @@ class CodeGenerator:
                 break
             qtype = self.qbe_type(param.val_type)
             print(f"{qtype} %{param.name}", end="", file=self.output)
-        print(") {", file=self.output)
-        print("@START", file=self.output)
+        print(") {\n@START", file=self.output)
 
     def cg_func_postamble(self) -> None:
-        print("@END", file=self.output)
-        print("  ret", file=self.output)
-        print("}", file=self.output)
+        print("@END\n  ret\n}", file=self.output)
 
     def cg_label(self, l: int) -> None:
         print(f"@L{l}", file=self.output)
@@ -202,16 +199,18 @@ class CodeGenerator:
         print(f"  jz %.t{t1}, @L{label}", file=self.output)
 
     def cg_add_local(self, val_type: ValType, sym: Symbol) -> None:
-        qtype = self.qbe_store_type(val_type)
-        print(f"  var {qtype} {sym.name}", file=self.output)
+        size = 4
+        if val_type in (ValType.INT64, ValType.UINT64, ValType.FLOAT64):
+            size = 8
+        print(f"  %{sym.name} =l alloc{size} 1", file=self.output)
 
     def cg_load_var(self, sym: Symbol) -> int:
         # if sym.val_type.kind == TypeKind.K_VOID:
         #     return 0
-        t = self.gen_temp()
+        t_new = self.gen_temp()
         qtype = self.qbe_load_type(sym.val_type)
-        print(f"  %.t{t} ={qtype} load ${sym.name}", file=self.output)
-        return t
+        print(f"  %.t{t_new} ={qtype} load ${sym.name}", file=self.output)
+        return t_new
 
     def cg_stor_var(self, t: int, exprtype: ValType, sym: Symbol) -> None:
         qtype = self.qbe_store_type(sym.val_type)

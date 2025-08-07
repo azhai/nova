@@ -12,27 +12,30 @@ fi
 # Try to use each input source file
 for i in test*.al
 # We can't do anything if there's no file to test against
-do if [ ! -f "out/$i" -a ! -f "err/$i" ]
+do
+  j="${i%.al}.txt"
+  k="ssa/${i%.al}.q"
+  if [ ! -f "out/$j" -a ! -f "err/$j" ]
    then echo "Can't run test on $i, no output or error file!"; exit 1
 
    # Output file: compile the source, run it and
    # capture the output, and compare it against
    # the known-good output
-   else if [ -f "out/$i" ]
+   else if [ -f "out/$j" ]
         then
 	  # Print the test name, compile it with our compiler
           echo -n $i
-	  $EXE -o out.q $i && qbe out.q > out.s && cc -o bin out.s
+	  $EXE -o $k $i && qbe $k > out.s && cc -o bin out.s
           ./bin > trial
 
   	  # Compare this agains the correct output
-          cmp -s "out/$i" trial
+          cmp -s "out/$j" trial
 
 	  # If different, announce failure
           # and print out the difference
           if [ "$?" -eq "1" ]
           then echo ": failed"
-            diff -c "out/$i" trial
+            diff -c "out/$j" trial
 	    # Stop if our 1st argument is "stop"
 	    if [ "$#" -eq 1 ] && [ $1 = "stop" ]
 	    then exit 1
@@ -47,14 +50,14 @@ do if [ ! -f "out/$i" -a ! -f "err/$i" ]
    # capture the error messages. Compare
    # against the known-bad output. Same
    # mechanism as before
-   else if [ -f "err/$i" ]
+   else if [ -f "err/$j" ]
         then
           echo -n $i
 	  $EXE -o /dev/null $i 2> trial
-          cmp -s "err/$i" trial
+          cmp -s "err/$j" trial
           if [ "$?" -eq "1" ]
           then echo ": failed"
-            diff -c "err/$i" trial
+            diff -c "err/$j" trial
             echo
           else echo ": OK"
           fi
