@@ -1,3 +1,4 @@
+import sys
 from io import StringIO
 from typing import List
 
@@ -79,6 +80,8 @@ class CodeGenerator:
         return self.label_id
 
     def write_all(self, out) -> None:
+        if not out:
+            out = sys.stdout
         out.write(self.output.getvalue())
 
     def cg_file_preamble(self) -> None:

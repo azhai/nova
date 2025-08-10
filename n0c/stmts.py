@@ -7,11 +7,6 @@ from defs import (
 from syms import add_symbol
 
 
-def binary_op(left: ASTNode, op: NodeType, right: ASTNode) -> ASTNode:
-    node = ASTNode(op, left=left, right=right)
-    return adjust_binary_node(node)
-
-
 def cast_node(node: ASTNode, new_type: ValType) -> Optional[ASTNode]:
     if not node or not new_type:
         return None

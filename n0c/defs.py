@@ -1,3 +1,4 @@
+import os
 import sys
 if sys.version_info >= (3, 11):
     from enum import IntEnum, StrEnum
@@ -43,16 +44,23 @@ def quote_string(s: str) -> str:
 
 
 class Output:
+    outFp, logFp = None, None
 
     def __init__(self, outfile: str, logfile: str = ""):
-        self.out = self.open(outfile) if outfile else sys.stdout
-        self.log = self.open(logfile) if logfile else sys.stderr
+        if outfile:
+            self.outFp = self.open(outfile)
+        if logfile:
+            self.logFp = self.open(logfile)
 
     @staticmethod
     def open(filename: str):
         """ 打开文件准备写入 """
+        if filename in ("stdout", "stderr"):
+            return getattr(sys, filename)
+        if filename == "/dev/null":
+            filename = os.devnull
         try:
-            return open(filename, 'w')
+            return open(filename, "w", encoding="utf-8")
         except FileNotFoundError:
             notice(f"File not found: {filename}")
         except IOError as e:
@@ -61,10 +69,10 @@ class Output:
 
     def close(self):
         """ 关闭文件 """
-        if self.out:
-            self.out.close()
-        if self.log:
-            self.log.close()
+        if self.outFp:
+            self.outFp.close()
+        if self.logFp:
+            self.logFp.close()
 
 
 class TokType(IntEnum):
@@ -308,11 +316,17 @@ class NodeType(IntEnum):
 
 class ASTNode:
     op: NodeType
-    sym: Optional[Symbol]
+    left, right = None, None
     val_type: Optional[ValType]
-    left, right, other = None, None, None
+    sym: Optional[Symbol]
     number, string = 0, ""
 
     def __init__(self, op: NodeType, left = None, right = None):
         self.op, self.sym, self.val_type = op, None, None
         self.left, self.right = left, right
+
+    def __repr__(self) -> str:
+        raise NotImplementedError()
+
+    def gen(self) -> int:
+        raise NotImplementedError()

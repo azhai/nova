@@ -4,16 +4,12 @@ from typing import Optional
 from defs import ASTNode, NodeType, ValType, fatal, quote_string
 
 
-def free_ast(node: Optional[ASTNode]) -> None:
-    if node is None:
-        return
-    free_ast(node.left)
-    free_ast(node.other)
-    free_ast(node.right)
+def free_ast(_: Optional[ASTNode]):
     # Python has garbage collection, so no need to explicitly free memory
+    return
 
 
-def dump_ast(out, node: Optional[ASTNode], level: int = 0) -> None:
+def dump_ast(node: Optional[ASTNode], level: int = 0, out = ""):
     if node is None:
         fatal("NULL AST node")
         return
@@ -49,12 +45,9 @@ def dump_ast(out, node: Optional[ASTNode], level: int = 0) -> None:
     elif node.op == NodeType.A_FUNC:
         out.write(f"{node.sym.name}")
     elif node.op in (NodeType.A_PRINTF, NodeType.A_PRINTF, NodeType.A_CALL):
-        if node.left:
-            # value = quote_string(node.left.string)
-            value = node.left.string
-            out.write(f"{value}")
+        out.write(f"{node.string}")
         if node.right:
-            dump_ast(out, node.right, level + 2)
+            dump_ast(node.right, level + 2, out=out)
         return
 
     out.write("\n")
@@ -64,8 +57,6 @@ def dump_ast(out, node: Optional[ASTNode], level: int = 0) -> None:
 
     # Recursively dump children
     if node.left:
-        dump_ast(out, node.left, new_level)
-    if node.other:
-        dump_ast(out, node.other, new_level)
+        dump_ast(node.left, new_level, out=out)
     if node.right:
-        dump_ast(out, node.right, new_level)
+        dump_ast(node.right, new_level, out=out)

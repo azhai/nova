@@ -10,7 +10,9 @@ from defs import (
 )
 from funcs import add_function, declare_function, gen_func_statement_block
 from lexer import Lexer, TokenQueue
-from stmts import cast_node, binary_op, gen_stat_declare
+from genast import (UnaryOp, BinaryOp, BlockNode, CallNode,
+                    IfNode, ForNode, WhileNode, PrintfNode)
+from stmts import cast_node, gen_stat_declare
 from syms import Scope
 
 
@@ -265,11 +267,21 @@ class Parser:
         right = self.expression()
         self.rparen()
         self.semi()
-        node = ASTNode(NodeType.A_PRINTF)
         if right.val_type == ValType.FLOAT32:
             right = cast_node(right, ValType.FLOAT64)
-        node.left, node.right = left, right
-        return node
+        return PrintfNode(left, right)
+
+    def function_call(self) -> ASTNode:
+        """
+        //- function_call= IDENT LPAREN expression_list? RPAREN SEMI
+        """
+        name = self.queue.curr_token().text
+        self.match_type(TokType.T_IDENT)
+        self.lparen()
+        args = None if self.rparen(False) else self.expression_list()
+        self.rparen()
+        self.semi()
+        return CallNode(name, args)
 
     def assign_stmt(self) -> ASTNode:
         """
@@ -297,25 +309,7 @@ class Parser:
         else_stmt = None
         if self.match_kw(Keyword.ELSE, False):
             else_stmt = self.statement_block()
-        node = ASTNode(NodeType.A_IF)
-        node.left = cond
-        node.mid = then_stmt
-        node.right = else_stmt
-        return node
-
-    def while_stmt(self) -> ASTNode:
-        """
-        //- while_stmt= WHILE LPAREN relational_expression RPAREN statement_block
-        """
-        self.match_kw(Keyword.WHILE)
-        self.lparen()
-        cond = self.expression()
-        self.rparen()
-        body = self.statement_block()
-        node = ASTNode(NodeType.A_WHILE)
-        node.left = cond
-        node.mid = body
-        return node
+        return IfNode(cond, then_stmt, else_stmt)
 
     def for_stmt(self) -> ASTNode:
         """
@@ -328,25 +322,18 @@ class Parser:
         cond = None if self.semi(False) else self.expression()
         incr = None if self.rparen(False) else self.expression()
         body = self.statement_block()
-        node = ASTNode(NodeType.A_FOR)
-        node.left, node.right = init, incr
-        node.mid = cond
-        node.mid.right = body
-        return node
+        return ForNode(cond, init, incr, body)
 
-    def function_call(self) -> ASTNode:
+    def while_stmt(self) -> ASTNode:
         """
-        //- function_call= IDENT LPAREN expression_list? RPAREN SEMI
+        //- while_stmt= WHILE LPAREN relational_expression RPAREN statement_block
         """
-        func_name = self.queue.curr_token().text
-        self.match_type(TokType.T_IDENT)
+        self.match_kw(Keyword.WHILE)
         self.lparen()
-        args = None if self.rparen(False) else self.expression_list()
+        cond = self.expression()
         self.rparen()
-        self.semi()
-        node = ASTNode(NodeType.A_CALL, right=args)
-        node.string = func_name
-        return node
+        body = self.statement_block()
+        return WhileNode(cond, body)
 
     def expression_list(self) -> ASTNode:
         """
@@ -379,14 +366,14 @@ class Parser:
         invert = self.match_ops(OpCode.INVERT)
         left = self.relational_expression()
         if invert:
-            left = ASTNode(NodeType.A_INVERT, right=left)
+            left = UnaryOp(NodeType.A_INVERT, right=left)
         while True:
             code = self.match_ops(OpCode.AND, OpCode.OR, OpCode.XOR)
             if code == OpCode.NOOP:
                 break
             op = NodeType(code)
             right = self.relational_expression()
-            left = binary_op(left, op, right)
+            left = BinaryOp(left, op, right)
         return left
 
     def relational_expression(self) -> ASTNode:
@@ -405,14 +392,14 @@ class Parser:
         log_not = self.match_ops(OpCode.NOT)
         left = self.shift_expression()
         if log_not:
-            left = ASTNode(NodeType.A_NOT, right=left)
+            left = UnaryOp(NodeType.A_NOT, right=left)
         while True:
             code = self.match_ops(OpCode.EQ, OpCode.NE, OpCode.LT, OpCode.LE, OpCode.GT, OpCode.GE)
             if code == OpCode.NOOP:
                 break
             op = NodeType(code)
             right = self.shift_expression()
-            left = binary_op(left, op, right)
+            left = BinaryOp(left, op, right)
         return left
 
     def shift_expression(self) -> ASTNode:
@@ -429,7 +416,7 @@ class Parser:
                 break
             op = NodeType(code)
             right = self.additive_expression()
-            left = binary_op(left, op, right)
+            left = BinaryOp(left, op, right)
         return left
 
     def additive_expression(self) -> ASTNode:
@@ -444,14 +431,14 @@ class Parser:
         negate = self.match_ops(OpCode.SUB)
         left = self.multiplicative_expression()
         if negate:
-            left = ASTNode(NodeType.A_NEG, right=left)
+            left = UnaryOp(NodeType.A_NEG, right=left)
         while True:
             code = self.match_ops(OpCode.ADD, OpCode.SUB)
             if code == OpCode.NOOP:
                 break
             op = NodeType(code)
             right = self.multiplicative_expression()
-            left = binary_op(left, op, right)
+            left = BinaryOp(left, op, right)
         return left
 
     def multiplicative_expression(self) -> ASTNode:
@@ -476,7 +463,7 @@ class Parser:
             if code == OpCode.NOOP:
                 break
             op = NodeType(code)
-            left = binary_op(left, op, self.factor())
+            left = BinaryOp(left, op, self.factor())
         return left
 
     def factor(self) -> Optional[ASTNode]:
