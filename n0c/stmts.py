@@ -40,7 +40,7 @@ def adjust_binary_node(node: ASTNode, force = False) -> ASTNode:
     elif node.op == NodeType.A_CALL and node.sym:
         if node.sym.sym_type == SymType.S_FUNC:
             node.val_type = node.sym.val_type
-    elif node.op == NodeType.A_VALUE:
+    elif node.op == NodeType.A_LITERAL:
         if node.string == "" and isinstance(node.number, int):
             node.val_type = fit_int_type(node.number)
     elif node.op == NodeType.A_CAST and node.right:
@@ -96,9 +96,8 @@ def fit_int_type(num: int, unsigned = False) -> ValType:
             return ValType.UINT32
         return ValType.UINT64
 
-
-def set_int_node(node: ASTNode, force = False) -> ASTNode:
-    if node.op != NodeType.A_VALUE:
+def set_int_node(node: ASTNode) -> ASTNode:
+    if node.op != NodeType.A_LITERAL:
         return node
     if node.val_type.is_integer():
         node.val_type = fit_int_type(node.number, False)
@@ -188,7 +187,7 @@ class StmtProcessor:
                 # 更新变量类型
                 sym.val_type = val_type = new_type
             # 保存初始值
-            if expr.op == NodeType.A_VALUE:
+            if expr.op == NodeType.A_LITERAL:
                 sym.init_val = expr.string if expr.string else expr.number
 
         # 创建声明语句AST节点

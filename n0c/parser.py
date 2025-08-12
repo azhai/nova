@@ -1,18 +1,18 @@
 """
-// Note: You can grep '//-' this file to extract the grammar
+Note: You can grep '//-' this file to extract the grammar
 """
-
+import sys
 from typing import List, Optional
 
 from defs import (
     NodeType, ValType, TokType, SymType, OpCode, Keyword,
-    Token, Symbol, ASTNode, fatal
+    Token, Operator, Symbol, ASTNode, fatal
 )
 from funcs import add_function, declare_function, gen_func_statement_block
 from lexer import Lexer, TokenQueue
 from genast import (UnaryOp, BinaryOp, BlockNode, CallNode,
                     IfNode, ForNode, WhileNode, PrintfNode)
-from stmts import cast_node, gen_stat_declare
+from stmts import cast_node, gen_stat_declare, fit_int_type
 from syms import Scope
 
 
@@ -49,35 +49,47 @@ class Parser:
             fatal(f"Unexpected token {curr}, expected {kw.value}")
         return False
 
-    def match_ops(self, *op_codes, **kwargs) -> int:
+    def match_ops(self, *op_codes, **kwargs) -> Optional[Operator]:
         curr = self.queue.curr_token()
-        if curr.tok_type == TokType.T_OPERATOR and curr.value in op_codes:
+        if isinstance(curr, Operator) and curr.value in op_codes:
             self.next_token()
-            return curr.value
+            return curr
         if kwargs.get("throw", False):
             fatal(f"Unexpected token {curr}, expected {op_codes}")
-        return OpCode.NOOP
+        return None
+
+    def match_infix(self, **kwargs) -> Optional[Operator]:
+        curr = self.queue.curr_token()
+        if isinstance(curr, Operator) and curr.prece > 0:
+            self.next_token()
+            return curr
+        if kwargs.get("throw", False):
+            fatal(f"Unexpected token {curr}")
+        return None
 
     def is_eof(self) -> bool:
         return self.match_type(TokType.T_EOF, False)
 
-    def comma(self, throw: bool = True) -> int:
+    def comma(self, throw: bool = True):
         return self.match_ops(OpCode.COMMA, throw=throw)
 
-    def semi(self, throw: bool = True) -> int:
+    def semi(self, throw: bool = True):
         return self.match_ops(OpCode.SEMI, throw=throw)
 
-    def lbrace(self, throw: bool = True) -> int:
+    def lbrace(self, throw: bool = True):
         return self.match_ops(OpCode.LBRACE, throw=throw)
 
-    def rbrace(self, throw: bool = True) -> int:
+    def rbrace(self, throw: bool = True):
         return self.match_ops(OpCode.RBRACE, throw=throw)
 
-    def lparen(self, throw: bool = True) -> int:
+    def lparen(self, throw: bool = True):
         return self.match_ops(OpCode.LPAREN, throw=throw)
 
-    def rparen(self, throw: bool = True) -> int:
+    def rparen(self, throw: bool = True):
         return self.match_ops(OpCode.RPAREN, throw=throw)
+
+    def assign(self, throw: bool = True):
+        return self.match_ops(OpCode.ASSIGN, throw=throw)
 
     def parse_program(self) -> Optional[ASTNode]:
         if self.queue is None:
@@ -110,7 +122,7 @@ class Parser:
         self.scope = self.scope.end_scope()
         return node
 
-    def function_prototype(self) -> (ASTNode, List[Symbol]):
+    def function_prototype(self):
         """
         //- function_prototype= typed_declaration LPAREN typed_declaration_list RPAREN
         //-                   | typed_declaration LPAREN VOID RPAREN
@@ -122,7 +134,7 @@ class Parser:
         self.rparen()
         return node, params
 
-    def typed_declaration_list(self) -> (ASTNode, List[Symbol]):
+    def typed_declaration_list(self):
         """
         //- typed_declaration_list= typed_declaration (COMMA typed_declaration_list)*
         """
@@ -153,7 +165,7 @@ class Parser:
             if not curr.is_type():
                 break
             decl = self.typed_declaration()
-            if self.match_ops(OpCode.ASSIGN):
+            if self.assign(False):
                 expr = self.expression()
                 decl = gen_stat_declare(decl, expr)
             self.semi()
@@ -261,7 +273,7 @@ class Parser:
         self.match_kw(Keyword.PRINTF)
         self.lparen()
         left = self.factor()
-        assert left.op == NodeType.A_VALUE
+        assert left.op == NodeType.A_LITERAL
         assert left.string != ""
         self.comma()
         right = self.expression()
@@ -288,12 +300,10 @@ class Parser:
         //- assign_stmt= variable ASSIGN expression SEMI
         """
         left = self.expression()
-        self.match_ops(OpCode.ASSIGN)
+        self.assign()
         right = self.expression()
         self.semi()
-        node = ASTNode(NodeType.A_ASSIGN)
-        node.left = left
-        node.right = right
+        node = ASTNode(NodeType.A_ASSIGN, left=left, right=right)
         return node
 
     def if_stmt(self) -> ASTNode:
@@ -348,127 +358,31 @@ class Parser:
 
     def expression(self) -> ASTNode:
         """
-        //- expression= bitwise_expression
+        //- expression= (prefix_op factor
+        //-                      | factor)
+        //-             (infix_op factor)*
         """
-        node = self.bitwise_expression()
-        return node
-
-    def bitwise_expression(self) -> ASTNode:
-        """
-        //- bitwise_expression= ( INVERT relational_expression
-        //-                     |        relational_expression
-        //-                     )
-        //-                     ( AND relational_expression
-        //-                     | OR  relational_expression
-        //-                     | XOR relational_expression
-        //-                     )*
-        """
-        invert = self.match_ops(OpCode.INVERT)
-        left = self.relational_expression()
-        if invert:
-            left = UnaryOp(NodeType.A_INVERT, right=left)
-        while True:
-            code = self.match_ops(OpCode.AND, OpCode.OR, OpCode.XOR)
-            if code == OpCode.NOOP:
-                break
-            op = NodeType(code)
-            right = self.relational_expression()
-            left = BinaryOp(left, op, right)
+        left, curr_op = None, self.match_ops(*Operator.unary_ops)
+        if curr_op is None: # 没有前缀运算符
+            left, curr_op = self.factor(), self.match_infix()
+        while curr_op is not None: # 表达式未结束
+            left, curr_op = self.infix_expression(left, curr_op)
         return left
 
-    def relational_expression(self) -> ASTNode:
-        """
-        //- relational_expression= ( NOT shift_expression
-        //-                        |     shift_expression
-        //-                        )
-        //-                        ( GE shift_expression
-        //-                        | GT shift_expression
-        //-                        | LE shift_expression
-        //-                        | LT shift_expression
-        //-                        | EQ shift_expression
-        //-                        | NE shift_expression
-        //-                        )?
-        """
-        log_not = self.match_ops(OpCode.NOT)
-        left = self.shift_expression()
-        if log_not:
-            left = UnaryOp(NodeType.A_NOT, right=left)
-        while True:
-            code = self.match_ops(OpCode.EQ, OpCode.NE, OpCode.LT, OpCode.LE, OpCode.GT, OpCode.GE)
-            if code == OpCode.NOOP:
-                break
-            op = NodeType(code)
-            right = self.shift_expression()
-            left = BinaryOp(left, op, right)
-        return left
-
-    def shift_expression(self) -> ASTNode:
-        """
-        //- shift_expression= additive_expression
-        //-                 ( LSHIFT additive_expression
-        //-                 | RSHIFT additive_expression
-        //-                 )*
-        """
-        left = self.additive_expression()
-        while True:
-            code = self.match_ops(OpCode.LSHIFT, OpCode.RSHIFT)
-            if code == OpCode.NOOP:
-                break
-            op = NodeType(code)
-            right = self.additive_expression()
-            left = BinaryOp(left, op, right)
-        return left
-
-    def additive_expression(self) -> ASTNode:
-        """
-        //- additive_expression= ( PLUS? multiplicative_expression
-        //-                      | MINUS multiplicative_expression
-        //-                      )
-        //-                      ( PLUS  multiplicative_expression
-        //-                      | MINUS multiplicative_expression
-        //-                      )*
-        """
-        negate = self.match_ops(OpCode.SUB)
-        left = self.multiplicative_expression()
-        if negate:
-            left = UnaryOp(NodeType.A_NEG, right=left)
-        while True:
-            code = self.match_ops(OpCode.ADD, OpCode.SUB)
-            if code == OpCode.NOOP:
-                break
-            op = NodeType(code)
-            right = self.multiplicative_expression()
-            left = BinaryOp(left, op, right)
-        return left
-
-    def multiplicative_expression(self) -> ASTNode:
-        """
-        //- multiplicative_expression= l:factor
-        //-                          ( STAR  factor
-        //-                          | SLASH factor
-        //-                          )*
-
-        //- multiplicative_expression= ( STAR? unary_expression
-        //-                             | SLASH unary_expression
-        //-                             | PERCENT unary_expression
-        //-                             )
-        //-                             ( STAR  unary_expression
-        //-                             | SLASH unary_expression
-        //-                             | PERCENT unary_expression
-        //-                             )*
-        """
-        left = self.factor()
-        while True:
-            code = self.match_ops(OpCode.MUL, OpCode.DIV, OpCode.MOD, OpCode.QUO)
-            if code == OpCode.NOOP:
-                break
-            op = NodeType(code)
-            left = BinaryOp(left, op, self.factor())
-        return left
+    def infix_expression(self, left, curr_op):
+        right, next_op = self.factor(), self.match_infix()
+        while next_op and next_op.prece > curr_op.prece:
+            right, next_op = self.infix_expression(right, next_op)
+        op = NodeType(curr_op.value)
+        if left is None:
+            right = UnaryOp(op, right)
+        else:
+            right = BinaryOp(left, op, right)
+        return right, next_op
 
     def factor(self) -> Optional[ASTNode]:
         """
-        //- factor= NUMLIT
+        //- factor= NUMBER
         //-       | TRUE
         //-       | FALSE
         //-       | variable
@@ -479,18 +393,22 @@ class Parser:
                 return self.function_call()
             else:
                 return self.variable()
-        elif curr.tok_type == TokType.T_NUMBER:
-            node = ASTNode(NodeType.A_VALUE)
+        elif curr.tok_type in (TokType.T_INTEGER, TokType.T_FLOAT):
+            node = ASTNode(NodeType.A_LITERAL)
             node.number = curr.value
+            node.val_type = ValType.FLOAT64
+            if curr.tok_type == TokType.T_INTEGER:
+                node.val_type = fit_int_type(curr.value)
             self.next_token()
             return node
         elif curr.tok_type == TokType.T_STRING:
-            node = ASTNode(NodeType.A_VALUE)
+            node = ASTNode(NodeType.A_LITERAL)
             node.string = curr.text
+            node.val_type = ValType.STR
             self.next_token()
             return node
         elif curr.tok_type == TokType.T_KEYWORD:
-            node = ASTNode(NodeType.A_VALUE)
+            node = ASTNode(NodeType.A_LITERAL)
             if curr.text == "null":
                 node.val_type = ValType.VOID
             elif curr.text in ("true", "false"):

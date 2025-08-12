@@ -160,22 +160,22 @@ def gen_ast(node: Optional[ASTNode]) -> int:
         return node.gen()
 
     # 根据节点类型生成相应的代码
-    if node.op == NodeType.A_VALUE and node.string == "":
+    if node.op == NodeType.A_LITERAL and node.string == "":
         return codegen.cg_load_lit(node)
     elif node.op == NodeType.A_IDENT:
         return codegen.cg_load_var(node.sym)
     elif node.op == NodeType.A_ASSIGN:
         right_temp = gen_ast(node.right)
-        codegen.cg_stor_var(right_temp, node.right.type, node.left.sym)
+        codegen.cg_stor_var(right_temp, node.right.val_type, node.left.sym)
         return right_temp
     elif node.op == NodeType.A_CAST:
         right_temp = gen_ast(node.right)
-        return codegen.cg_cast(right_temp, node.right.type, node.val_type)
+        return codegen.cg_cast(right_temp, node.right.val_type, node.val_type)
     elif node.op == NodeType.A_LOCAL:
         codegen.cg_add_local(node.val_type, node.sym)
         if node.left:
             expr_temp = gen_ast(node.left)
-            codegen.cg_stor_var(expr_temp, node.left.type, node.sym)
+            codegen.cg_stor_var(expr_temp, node.left.val_type, node.sym)
         return 0
     elif node.op == NodeType.A_RETURN:
         expr_temp = gen_ast(node.left)

@@ -1,10 +1,11 @@
 import os
 import sys
+from typing import Optional
+
 if sys.version_info >= (3, 11):
     from enum import IntEnum, StrEnum
 else:
     from enum_v3_11 import IntEnum, StrEnum
-from typing import Optional
 
 
 def fatal(msg: str):
@@ -84,8 +85,9 @@ class TokType(IntEnum):
     T_IDENT = 5
     T_VOID = 6
     T_BOOL = 7
-    T_NUMBER = 8
-    T_STRING = 9
+    T_STRING = 8
+    T_INTEGER = 9
+    T_FLOAT = 10
 
 
 class Token:
@@ -175,6 +177,44 @@ def is_comparison(code: int) -> bool:
 
 def is_logical(code: int) -> bool:
     return OpCode.INVERT <= code <= OpCode.RSHIFT
+
+
+class Operator(Token):
+    _prece: int = -1
+    _unary: bool = False
+    unary_ops = (OpCode.NEG, OpCode.NOT, OpCode.INVERT)
+    precedences = {
+        OpCode.NOOP: 0,
+        OpCode.AND: 10, OpCode.OR: 10, OpCode.XOR: 10,
+        OpCode.INVERT: 20,
+        OpCode.LOG_OR: 30,
+        OpCode.LOG_AND: 40,
+        OpCode.NOT: 50,
+        OpCode.EQ: 60, OpCode.NE: 60, OpCode.LT: 60, OpCode.LE: 60, OpCode.GT: 60, OpCode.GE: 60,
+        OpCode.LSHIFT: 70, OpCode.RSHIFT: 70,
+        OpCode.NEG: 80, OpCode.ADD: 80, OpCode.SUB: 80,
+        OpCode.MUL: 90, OpCode.DIV: 90, OpCode.MOD: 90, OpCode.QUO: 90,
+        OpCode.POW: 100,
+    }
+
+    def __init__(self, text: str, value: int):
+        super().__init__(TokType.T_OPERATOR, text)
+        self.value = value
+
+    @property
+    def is_unary(self) -> bool:
+        if self._unary:
+            return self._unary
+        if self.value in self.unary_ops:
+            self._unary = True
+        return self._unary
+
+    @property
+    def prece(self) -> int:
+        if self._prece >= 0:
+            return self._prece
+        self._prece = self.precedences.get(self.value, 0)
+        return self._prece
 
 
 class Keyword(StrEnum):
@@ -270,7 +310,7 @@ class NodeType(IntEnum):
     A_CLASS = 13
     A_TYPE = 14
     A_IDENT = 15
-    A_VALUE = 16
+    A_LITERAL = 16
     A_BLOCK = 17
     A_GOTO = 18
     A_RETURN = 19

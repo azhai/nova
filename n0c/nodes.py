@@ -32,7 +32,7 @@ def dump_ast(node: Optional[ASTNode], level: int = 0, out = ""):
     # Print node-specific information
     if node.op == NodeType.A_IDENT:
         out.write(f"{node.string}")
-    elif node.op == NodeType.A_VALUE:
+    elif node.op == NodeType.A_LITERAL:
         if node.val_type and node.val_type == ValType.STR:
             value = quote_string(node.string)
             out.write(f"({value})")

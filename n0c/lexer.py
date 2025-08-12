@@ -1,6 +1,6 @@
 import sys
 
-from defs import TokType, OpCode, Token, fatal, create_keyword_token
+from defs import TokType, OpCode, Token, Operator, fatal, create_keyword_token
 
 NumberMaxLen = 30
 OperatorMaxLen = 3
@@ -165,13 +165,17 @@ class Lexer:
                 i -= 1   # 后面处理时加1，为了和循环正常结束保持一致
                 break
         temp = self.buf[:i+1].replace("_", "")
-        if temp != "" and temp.isnumeric():
-            token = Token(TokType.T_NUMBER, temp)
-            token.value = float(temp) if is_float else int(temp)
-            token.line_no = self.line_no
-            self.buf = self.buf[i+1:]
-            return token
-        return None
+        if is_float:
+            token = Token(TokType.T_FLOAT, temp)
+            token.value = float(temp)
+        elif temp.isnumeric():
+            token = Token(TokType.T_INTEGER, temp)
+            token.value = int(temp)
+        else:
+            return None
+        token.line_no = self.line_no
+        self.buf = self.buf[i+1:]
+        return token
 
     def scan_hex_oct(self, c: str):
         token, i, base = None, 2, 16
@@ -185,12 +189,10 @@ class Lexer:
                 i -= 1   # 后面处理时加1，为了和循环正常结束保持一致
                 break
         temp = self.buf[:i+1].replace("_", "")
-        # if temp != "" and temp.isnumeric():
-        if temp != "":
-            token = Token(TokType.T_NUMBER, temp)
-            token.value = int(temp, base)
-            token.line_no = self.line_no
-            self.buf = self.buf[i+1:]
+        token = Token(TokType.T_INTEGER, temp)
+        token.value = int(temp, base)
+        token.line_no = self.line_no
+        self.buf = self.buf[i+1:]
         return token
 
     def scan_operator(self, c: str):
@@ -199,8 +201,7 @@ class Lexer:
             return None
         for text, op in items:
             if self.buf.startswith(text):
-                token = Token(TokType.T_OPERATOR, text)
-                token.value = op.value
+                token = Operator(text, op.value)
                 token.line_no = self.line_no
                 self.buf = self.buf[len(text):]
                 return token

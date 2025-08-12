@@ -219,24 +219,24 @@ class CodeGenerator:
         qtype = self.qbe_store_type(sym.val_type)
         print(f"  store {qtype} %.t{t}, ${sym.name}", file=self.output)
 
-    def cg_cast(self, t: int, val_type: ValType, newtype: ValType) -> int:
+    def cg_cast(self, t: int, val_type: ValType, new_type: ValType) -> int:
         t_new = self.gen_temp()
         if val_type.is_float():
-            if newtype.is_float():
-                qtype = self.qbe_type(newtype)
+            if new_type.is_float():
+                qtype = self.qbe_type(new_type)
                 print(f"  %.t{t_new} ={qtype} copy %.t{t}", file=self.output)
             else:
                 qtype = self.qbe_type(val_type)
-                new_qtype = self.qbe_type(newtype)
+                new_qtype = self.qbe_type(new_type)
                 print(f"  %.t{t_new} ={new_qtype} trunc {qtype} %.t{t}", file=self.output)
         else:
-            if newtype.is_float():
+            if new_type.is_float():
                 qtype = self.qbe_type(val_type)
-                new_qtype = self.qbe_type(newtype)
+                new_qtype = self.qbe_type(new_type)
                 print(f"  %.t{t_new} ={new_qtype} extend {qtype} %.t{t}", file=self.output)
             else:
                 qtype = self.qbe_ext_type(val_type)
-                new_qtype = self.qbe_type(newtype)
+                new_qtype = self.qbe_type(new_type)
                 print(f"  %.t{t_new} ={new_qtype} {qtype} %.t{t}", file=self.output)
         return t_new
 
