@@ -1,10 +1,9 @@
 from typing import Optional, Union
 
 from defs import (
-    ASTNode, NodeType, ValType, Symbol, SymType, fatal,
+    ASTNode, NodeType, ValType, Symbol, SymType,
     is_comparison, is_arithmetic, is_logical
 )
-from syms import add_symbol
 
 
 def cast_node(node: ASTNode, new_type: ValType) -> Optional[ASTNode]:
@@ -96,15 +95,6 @@ def fit_int_type(num: int, unsigned = False) -> ValType:
             return ValType.UINT32
         return ValType.UINT64
 
-def set_int_node(node: ASTNode) -> ASTNode:
-    if node.op != NodeType.A_LITERAL:
-        return node
-    if node.val_type.is_integer():
-        node.val_type = fit_int_type(node.number, False)
-    elif node.val_type.is_unsigned():
-        node.val_type = fit_int_type(node.number, True)
-    return node
-
 
 def parse_number(num: str) -> Union[int, float]:
     if num.startswith('0x') or num.startswith('0X'):
@@ -114,118 +104,3 @@ def parse_number(num: str) -> Union[int, float]:
     elif num.replace('.', '', 1).isdigit():
         return float(num)
     return int(num)
-
-
-
-class StmtProcessor:
-    @staticmethod
-    def printf_statement(expr: ASTNode) -> ASTNode:
-        if not expr:
-            return None
-
-        # 拓宽表达式类型
-        expr = set_int_node(expr)
-
-        # 对于float32类型，拓宽为float64
-        if expr.val_type == ValType.FLOAT32:
-            expr = cast_node(expr, ValType.FLOAT64)
-
-        # 创建打印语句AST节点
-        node = ASTNode(NodeType.A_PRINTF, left=expr)
-        node.val_type = ValType.VOID
-        return node
-
-    @staticmethod
-    def assignment_statement(val: ASTNode, expr: ASTNode) -> ASTNode:
-        if not val or not expr or val.op != NodeType.A_IDENT:
-            fatal("Invalid assignment target")
-
-        # 拓宽表达式类型
-        expr = set_int_node(expr)
-        # 拓宽左值类型
-        val = set_int_node(val)
-
-        # 确保类型兼容
-        if val.val_type != expr.val_type:
-            new_type = widen_type(val.val_type, expr.val_type)
-            if new_type is None:
-                fatal(f"Type mismatch in assignment: {val.val_type} and {expr.val_type}")
-            # 转换表达式类型以匹配左值类型
-            if expr.val_type != new_type:
-                expr = cast_node(expr, new_type)
-            # 更新左值类型
-            val.val_type = new_type
-
-        # 创建赋值语句AST节点
-        node = ASTNode(NodeType.A_ASSIGN, left=val, right=expr)
-        node.val_type = val.val_type
-        return node
-
-    @staticmethod
-    def declaration_statement(val_type:ValType, name: str, expr: Optional[ASTNode]) -> ASTNode:
-        # 检查符号是否已存在
-        from syms import find_symbol
-        existing = find_symbol(name)
-        if existing:
-            fatal(f"Symbol {name} already declared")
-
-        # 创建新符号
-        sym = Symbol(name, sym_type=SymType.S_VAR, val_type=val_type)
-        # 添加到符号表
-        add_symbol(sym)
-
-        # 如果有初始化表达式，处理类型拓宽
-        if expr:
-            expr = set_int_node(expr)
-            # 确保类型兼容
-            if val_type != expr.val_type:
-                new_type = widen_type(val_type, expr.val_type)
-                if new_type is None:
-                    fatal(f"Type mismatch in declaration of {name}: {val_type} and {expr.val_type}")
-                # 转换表达式类型
-                expr = cast_node(expr, new_type)
-                # 更新变量类型
-                sym.val_type = val_type = new_type
-            # 保存初始值
-            if expr.op == NodeType.A_LITERAL:
-                sym.init_val = expr.string if expr.string else expr.number
-
-        # 创建声明语句AST节点
-        node = ASTNode(NodeType.A_LOCAL, left=expr, right=None)
-        node.val_type, node.sym = val_type, sym
-        return node
-
-
-def gen_stat_assign(val: ASTNode, expr: ASTNode) -> ASTNode:
-    """ 创建赋值语句AST节点 """
-    expr = cast_node(expr, val.val_type)
-    node = ASTNode(
-        op=NodeType.A_ASSIGN,
-        left=expr,
-        right=None
-    )
-    node.val_type = val.sym.val_type
-    node.rvalue = False
-    return node
-
-
-def gen_stat_printf(first: ASTNode, expr: ASTNode) -> ASTNode:
-    """ 创建打印语句AST节点 """
-    if expr.val_type == ValType.FLOAT32:
-        expr = cast_node(expr, ValType.FLOAT64)
-    node = ASTNode(NodeType.A_PRINTF, left=first, right=expr)
-    return node
-
-
-def gen_stat_declare(ident: ASTNode, expr: ASTNode) -> ASTNode:
-    """ 创建声明语句AST节点 """
-    val_type = ident.sym.val_type
-    expr = cast_node(expr, val_type)
-    # 添加到符号表
-    sym = Symbol(ident.sym.name, SymType.S_VAR, val_type=val_type)
-    sym.has_addr = True
-    add_symbol(sym)
-    # 改造ident
-    ident.sym, ident.val_type = sym, val_type
-    ident.op, ident.left = NodeType.A_LOCAL, expr
-    return ident

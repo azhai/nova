@@ -1,20 +1,25 @@
+import sys
+from sqlite3.dbapi2 import paramstyle
 from typing import Optional
 
-from cgen import codegen
-from defs import (ASTNode, NodeType, ValType, SymType, fatal,
-                  is_arithmetic, is_logical, is_comparison)
-from stmts import adjust_binary_node
-from strlits import get_strlit_label
+from defs import (
+    ASTNode, NodeType, ValType, SymType, Symbol, fatal,
+    is_arithmetic, is_logical, is_comparison, quote_string
+)
+from cgen import codegen, get_str_lit_label
+from stmts import adjust_binary_node, cast_node
+from syms import curr_scope
 
 
 class UnaryOp(ASTNode):
 
     def __init__(self, op: NodeType, right):
-        super().__init__(op, right)
+        super().__init__(op, right=right)
+        self.val_type = self.right.val_type
 
     def gen(self) -> int:
         right = gen_ast(self.right)
-        if self.op == NodeType.A_NEG:
+        if self.op in (NodeType.A_NEG, NodeType.A_SUB):
             return codegen.cg_negate(right, self.val_type)
         elif self.op == NodeType.A_NOT:
             return codegen.cg_not(right, self.val_type)
@@ -28,7 +33,7 @@ class UnaryOp(ASTNode):
 class BinaryOp(ASTNode):
 
     def __init__(self, left, op: NodeType, right):
-        super().__init__(op, left, right)
+        super().__init__(op, left=left, right=right)
         adjust_binary_node(self)
 
     def gen(self) -> int:
@@ -79,6 +84,96 @@ class CallNode(ASTNode):
             arg_node = arg_node.right
         # 调用函数
         return codegen.cg_call(self.sym, len(args), args, arg_types)
+
+
+class LiteralNode(ASTNode):
+    number, string = 0, ""
+
+    def __init__(self, text: str = "", val_type: ValType = ValType.STR):
+        super().__init__(NodeType.A_LITERAL)
+        self.val_type, self.string = val_type, text
+
+    def __repr__(self) -> str:
+        if self.val_type and self.val_type == ValType.STR:
+            value = quote_string(self.string)
+        else:
+            value = self.number
+        return f"{self.type_name()} {self.op_name()} ({value})"
+
+    def gen(self) -> int:
+        if self.val_type == ValType.STR:
+            return codegen.cg_load_lit(self.string, self.val_type)
+        else:
+            return codegen.cg_load_lit(self.number, self.val_type)
+
+
+class IdentNode(ASTNode):
+    name: str
+    node_type: NodeType = NodeType.A_IDENT
+    sym_type: SymType = SymType.S_LOCAL
+    sym: Optional[Symbol] = None
+
+    def __init__(self, name: str, val_type: Optional[ValType] = None):
+        super().__init__(self.node_type)
+        self.name, self.val_type = name, val_type
+        if name and val_type:
+            self.get_sym()
+
+    def __repr__(self) -> str:
+        return f"{self.type_name()} {self.op_name()} {self.sym.name}"
+
+    def gen(self) -> int:
+        return codegen.cg_load_var(self.sym)
+
+    def get_sym(self):
+        if self.sym is None:
+            self.sym = Symbol(self.name, self.val_type, self.sym_type)
+        return self.sym
+
+    def set_sym(self, sym):
+        self.sym = sym
+        if sym and sym.name:
+            self.name = sym.name
+        if sym and sym.val_type:
+            self.val_type = sym.val_type
+        return self.sym
+
+
+class VariableNode(IdentNode):
+    node_type: NodeType = NodeType.A_LOCAL
+    sym_type: SymType = SymType.S_VAR
+
+    def gen(self) -> int:
+        codegen.cg_add_local(self.sym.val_type, self.sym)
+        if self.left:
+            expr = gen_ast(self.left)
+            codegen.cg_stor_var(expr, self.left.val_type, self.sym)
+        return 0
+
+    def assign(self, expr: ASTNode):
+        self.left = cast_node(expr, self.sym.val_type)
+        return
+
+
+class FunctionNode(IdentNode):
+    node_type: NodeType = NodeType.A_FUNC
+    sym_type: SymType = SymType.S_FUNC
+
+    def __repr__(self) -> str:
+        name = super().__repr__()
+        params = ", ".join([repr(arg) for arg in self.args])
+        return f"{name}({params})"
+
+    def gen(self) -> int:
+        # 生成函数前导
+        curr_scope.new_scope(self.sym.name)
+        codegen.cg_func_preamble(self)
+        # 生成函数体
+        result = gen_ast(self.left)
+        # 生成函数后导
+        codegen.cg_func_postamble()
+        curr_scope.end_scope()
+        return result
 
 
 class IfNode(ASTNode):
@@ -145,25 +240,28 @@ class PrintfNode(ASTNode):
         super().__init__(NodeType.A_PRINTF, left, right)
 
     def gen(self) -> int:
-        expr_temp = gen_ast(self.right)
         # 根据类型选择合适的格式字符串
-        label = get_strlit_label(self.left.string)
-        codegen.cg_print(label, expr_temp, self.right.val_type)
+        label = get_str_lit_label(self.left.string)
+        expr, val_type = gen_ast(self.right), self.right.val_type
+        codegen.cg_print(label, expr, val_type)
         return 0
 
 
 def gen_ast(node: Optional[ASTNode]) -> int:
     if not node:
         return 0
-    if isinstance(node, (UnaryOp, BinaryOp, BlockNode, CallNode,
-                         IfNode, ForNode, WhileNode, PrintfNode)):
+    if type(node) != ASTNode:
         return node.gen()
 
     # 根据节点类型生成相应的代码
-    if node.op == NodeType.A_LITERAL and node.string == "":
-        return codegen.cg_load_lit(node)
-    elif node.op == NodeType.A_IDENT:
-        return codegen.cg_load_var(node.sym)
+    if node.op == NodeType.A_GLUE:
+        if node.left:
+            gen_ast(node.left)
+        for arg in node.args:
+            gen_ast(arg)
+        if node.right:
+            gen_ast(node.right)
+        return 0
     elif node.op == NodeType.A_ASSIGN:
         right_temp = gen_ast(node.right)
         codegen.cg_stor_var(right_temp, node.right.val_type, node.left.sym)
@@ -171,21 +269,42 @@ def gen_ast(node: Optional[ASTNode]) -> int:
     elif node.op == NodeType.A_CAST:
         right_temp = gen_ast(node.right)
         return codegen.cg_cast(right_temp, node.right.val_type, node.val_type)
-    elif node.op == NodeType.A_LOCAL:
-        codegen.cg_add_local(node.val_type, node.sym)
-        if node.left:
-            expr_temp = gen_ast(node.left)
-            codegen.cg_stor_var(expr_temp, node.left.val_type, node.sym)
-        return 0
     elif node.op == NodeType.A_RETURN:
         expr_temp = gen_ast(node.left)
         codegen.cg_ret(expr_temp)
         return expr_temp
-    elif node.op == NodeType.A_GLUE:
-        gen_ast(node.left)
-        gen_ast(node.right)
-        return 0
     else:
         fatal(f"Unknown AST node type: {node.op}")
         return 0
+
+
+def dump_ast(node: Optional[ASTNode], level: int = 0, out = "", pre = ""):
+    if node is None:
+        fatal("NULL AST node")
+        return
+
+    # Print indentation
+    if out is None:
+        out = sys.stdout
+    out.write(" " * level)
+    out.write(pre)
+
+    # Print type and operation name
+    out.write(repr(node))
+    # Print node-specific information
+    if node.op == NodeType.A_ASSIGN:
+        out.write(f" {node.left.sym.name} = ")
+
+    out.write("\n")
+    # Adjust level for local nodes
+    new_level = level + 2 if node.op != NodeType.A_LOCAL else level - 2
+    # Recursively dump children
+    if node.left:
+        dump_ast(node.left, new_level, out=out, pre="->")
+    if node.op != NodeType.A_FUNC:
+        for arg in node.args:
+            dump_ast(arg, new_level, out=out, pre="--")
+    if node.right:
+        dump_ast(node.right, new_level, out=out, pre="=>")
+
 

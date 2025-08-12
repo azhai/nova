@@ -2,8 +2,16 @@ import sys
 from io import StringIO
 from typing import List
 
-from defs import ASTNode, Symbol, NodeType, ValType, fatal
-from strlits import strlit_processor
+from defs import Symbol, NodeType, ASTNode, ValType, fatal
+
+str_literal_labels = {}
+
+def get_str_lit_label(value: str) -> int:
+    label = str_literal_labels.get(value, 0)
+    if label <= 0:
+        label = len(str_literal_labels) + 1
+        str_literal_labels[value] = label
+    return label
 
 
 class CodeGenerator:
@@ -88,12 +96,12 @@ class CodeGenerator:
         pass
 
     def cg_file_postamble(self) -> None:
-        for strlit in strlit_processor:
-            self.cg_strlit(strlit)
+        for value, label in str_literal_labels.items():
+            self.cg_str_lit(value, label)
 
-    def cg_func_preamble(self, fn_sym: Symbol) -> None:
-        print(f"export function ${fn_sym.name}(", end="", file=self.output)
-        for i, param in enumerate(fn_sym.params):
+    def cg_func_preamble(self, node: ASTNode) -> None:
+        print(f"export function ${node.sym.name}(", end="", file=self.output)
+        for i, param in enumerate(node.args):
             if i > 0:
                 print(", ", end="", file=self.output)
             if param.val_type == ValType.VOID:
@@ -108,16 +116,9 @@ class CodeGenerator:
     def cg_label(self, l: int) -> None:
         print(f"@L{l}", file=self.output)
 
-    def cg_strlit(self, strlit) -> None:
+    def cg_str_lit(self, value, label) -> None:
         # 转义特殊字符
-        # escaped = strlit.val.replace('\a', '\\a').replace('\b', '\\b')
-        # escaped = escaped.replace('\f', '\\f').replace('\n', '\\n')
-        # escaped = escaped.replace('\r', '\\r').replace('\t', '\\t').replace('\v', '\\v')
-        # escaped = escaped.replace('\\', '\\\\').replace('"', '\\"')
-        # print(f"data $L{label} = {{ b \"{escaped}\", b 0 }}", file=self.output)
-
-        #label, value = strlit.label, quote_string(strlit.val)
-        label, value = strlit.label, strlit.val
+        # value = quote_string(value)
         print(f"data $L{label} = {{ b {value}, b 0 }}", file=self.output)
 
     def cg_ret(self, node=None):
@@ -143,13 +144,13 @@ class CodeGenerator:
         qtype = self.qbe_type(val_type)
         print(f"  call $printf(l $L{label}, {qtype} %.t{temp})", file=self.output)
 
-    def cg_load_lit(self, node: ASTNode) -> int:
+    def cg_load_lit(self, value, val_type: ValType) -> int:
         t = self.gen_temp()
-        qtype = self.qbe_type(node.val_type)
-        if node.val_type.is_float():
-            print(f"  %.t{t} ={qtype} copy {qtype}_{node.number}", file=self.output)
+        qtype = self.qbe_type(val_type)
+        if val_type.is_float():
+            print(f"  %.t{t} ={qtype} copy {qtype}_{value}", file=self.output)
         else:
-            print(f"  %.t{t} ={qtype} copy {node.number}", file=self.output)
+            print(f"  %.t{t} ={qtype} copy {value}", file=self.output)
         return t
 
     def cg_negate(self, t: int, val_type: ValType) -> int:
@@ -215,8 +216,8 @@ class CodeGenerator:
         print(f"  %.t{t_new} ={qtype} load ${sym.name}", file=self.output)
         return t_new
 
-    def cg_stor_var(self, t: int, exprtype: ValType, sym: Symbol) -> None:
-        qtype = self.qbe_store_type(sym.val_type)
+    def cg_stor_var(self, t: int, val_type: ValType, sym: Symbol) -> None:
+        qtype = self.qbe_store_type(val_type)
         print(f"  store {qtype} %.t{t}, ${sym.name}", file=self.output)
 
     def cg_cast(self, t: int, val_type: ValType, new_type: ValType) -> int:
@@ -252,24 +253,4 @@ class CodeGenerator:
 
 
 codegen = CodeGenerator()
-gen_label = codegen.gen_label
-gen_temp = codegen.gen_temp
 cg_glob_sym = codegen.cg_glob_sym
-cg_negate = codegen.cg_negate
-cg_not = codegen.cg_not
-cg_invert = codegen.cg_invert
-# cg_arithmetic = codegen.cg_arithmetic
-# cg_logical = codegen.cg_logical
-# cg_comparison = codegen.cg_comparison
-# cg_label = codegen.cg_label
-# cg_str_lit = codegen.cg_strlit
-# cg_ret = codegen.cg_ret
-# cg_jump = codegen.cg_jump
-# cg_if_false = codegen.cg_if_false
-# cg_print = codegen.cg_print
-# cg_load_lit = codegen.cg_load_lit
-# cg_load_var = codegen.cg_load_var
-# cg_stor_var = codegen.cg_stor_var
-# cg_cast = codegen.cg_cast
-# cg_add_local = codegen.cg_add_local
-# cg_call = codegen.cg_call

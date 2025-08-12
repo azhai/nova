@@ -1,28 +1,27 @@
 """
 Note: You can grep '//-' this file to extract the grammar
 """
-import sys
+
 from typing import List, Optional
 
 from defs import (
-    NodeType, ValType, TokType, SymType, OpCode, Keyword,
-    Token, Operator, Symbol, ASTNode, fatal
+    NodeType, ValType, TokType, OpCode, Keyword,
+    Token, SymType, Operator, ASTNode, fatal
 )
-from funcs import add_function, declare_function, gen_func_statement_block
+from asts import (
+    UnaryOp, BinaryOp, CallNode, LiteralNode, IdentNode, VariableNode,
+    FunctionNode, IfNode, ForNode, WhileNode, PrintfNode
+)
 from lexer import Lexer, TokenQueue
-from genast import (UnaryOp, BinaryOp, BlockNode, CallNode,
-                    IfNode, ForNode, WhileNode, PrintfNode)
-from stmts import cast_node, gen_stat_declare, fit_int_type
-from syms import Scope
+from stmts import fit_int_type, cast_node
+from syms import curr_scope
 
 
 class Parser:
     queue: TokenQueue = None
-    scope: Scope = None
 
     def __init__(self, lexer: Lexer = None):
         self.queue = TokenQueue(lexer.scan())
-        self.scope = Scope()
 
     def next_token(self) -> Optional[Token]:
         tk = self.queue.next_token()
@@ -94,11 +93,11 @@ class Parser:
     def parse_program(self) -> Optional[ASTNode]:
         if self.queue is None:
             fatal("Lexer or TokenQueue is not initialized")
-        return self.function_declarations()
+        return self.function_declaration_list()
 
-    def function_declarations(self) -> Optional[ASTNode]:
+    def function_declaration_list(self) -> Optional[ASTNode]:
         """
-        //- function_declarations= function_declaration*
+        //- function_declaration_list= function_declaration*
         """
         node = None
         while not self.is_eof():
@@ -110,93 +109,87 @@ class Parser:
         //- function_declaration= function_prototype statement_block
         //-                     | function_prototype SEMI
         """
-        node, params = self.function_prototype()
+        node = self.function_prototype()
+        if not curr_scope.find_symbol(node.sym.name, SymType.S_FUNC):
+            curr_scope.add_symbol(node.sym, True) # 添加到符号表
         if self.semi(False):
-            sym = add_function(node, params)
-            self.scope.add_symbol(sym, True) # 添加到符号表
             return node
-        body = self.statement_block()
-        node = declare_function(node, params, body)
-        self.scope = self.scope.new_scope(node.sym.name)
-        gen_func_statement_block(node.sym, body)
-        self.scope = self.scope.end_scope()
+        node.left = self.statement_block()
         return node
 
-    def function_prototype(self):
+    def function_prototype(self) -> ASTNode:
         """
-        //- function_prototype= typed_declaration LPAREN typed_declaration_list RPAREN
-        //-                   | typed_declaration LPAREN VOID RPAREN
+        //- function_prototype= ident_declaration LPAREN ident_declaration_list RPAREN
+        //-                   | ident_declaration LPAREN VOID RPAREN
         """
-        node, params = self.typed_declaration(), []
+        node = self.ident_declaration(SymType.S_FUNC)
         self.lparen()
         if not self.match_kw(Keyword.VOID, False):
-            node.left, params = self.typed_declaration_list()
+            node.args = self.ident_declaration_list()
         self.rparen()
-        return node, params
-
-    def typed_declaration_list(self):
-        """
-        //- typed_declaration_list= typed_declaration (COMMA typed_declaration_list)*
-        """
-        first = self.typed_declaration()
-        node, sym_list = first, [first.sym, ]
-        while self.comma(False):
-            next_node = self.typed_declaration()
-            sym_list.append(next_node.sym)
-            node.mid = next_node
-            node = next_node
-        return first, sym_list
-
-    def typed_declaration(self) -> ASTNode:
-        """
-        //- typed_declaration= type IDENT
-        """
-        type_obj = self.get_type()
-        node = self.get_id(type_obj)
         return node
 
-    def declaration_stmts(self) -> ASTNode:
+    def ident_declaration_list(self) -> List[ASTNode]:
         """
-        //- declaration_stmts= (typed_declaration ASSIGN expression SEMI)+
+        //- ident_declaration_list= ident_declaration (COMMA ident_declaration_list)*
         """
-        node, last = None, None
+        nodes = [self.ident_declaration(), ]
+        while self.comma(False):
+            nodes.append(self.ident_declaration())
+        return nodes
+
+    def ident_declaration(self, sym_type: SymType = SymType.S_LOCAL) -> Optional[ASTNode]:
+        """
+        //- ident_declaration= type IDENT
+        """
+        val_type = self.type_declaration()
+        curr = self.queue.curr_token()
+        if curr.tok_type != TokType.T_IDENT:
+            return None
+        self.next_token()
+        if sym_type == SymType.S_FUNC:
+            return FunctionNode(curr.text, val_type)
+        elif sym_type == SymType.S_VAR:
+            return VariableNode(curr.text, val_type)
+        else:
+            return IdentNode(curr.text, val_type)
+
+    def type_declaration(self) -> ValType:
+        """
+        //- type= built-in type | user-defined type
+        """
+        curr = self.queue.curr_token()
+        if curr.tok_type != TokType.T_KEYWORD:
+            fatal(f"Unknown type {curr}")
+        self.next_token()
+        return ValType(curr.text)
+
+    def declaration_stmt_list(self) -> ASTNode:
+        """
+        //- declaration_stmt_list= (ident_declaration ASSIGN expression SEMI)+
+        """
+        node = ASTNode(NodeType.A_GLUE)
         while True:
             curr = self.queue.curr_token()
             if not curr.is_type():
                 break
-            decl = self.typed_declaration()
+            var = self.ident_declaration(SymType.S_VAR)
             if self.assign(False):
-                expr = self.expression()
-                decl = gen_stat_declare(decl, expr)
+                var.assign(self.expression())
             self.semi()
-            if not node:
-                node = decl
-            else:
-                last.right = decl
-            last = decl
+            node.args.append(var)
         return node
 
-    def procedural_stmts(self) -> ASTNode:
+    def procedural_stmt_list(self) -> ASTNode:
         """
-        //- procedural_stmts= procedural_stmt*
+        //- procedural_stmt_list= procedural_stmt*
         """
-        node, last = None, None
+        node = ASTNode(NodeType.A_GLUE)
         while True:
             last = self.procedural_stmt()
             if not last:
                 break
-            if not node:
-                node = last
-            else:
-                node = ASTNode(NodeType.A_GLUE, left=node, right=last)
-
-        # while self.curr.token not in (TokenType.T_RBRACE, TokenType.T_EOF):
-        #     stmt = self.procedural_stmt()
-        #     if not node:
-        #         node = stmt
-        #     else:
-        #         last.right = stmt
-        #     last = stmt
+            node.args.append(last)
         return node
 
     def procedural_stmt(self) -> Optional[ASTNode]:
@@ -215,7 +208,7 @@ class Parser:
             return None
         if curr.tok_type == TokType.T_IDENT:
             if self.lparen(False):
-                return self.function_call()
+                return self.function_call(curr)
             else:
                 return self.assign_stmt()
         if curr.tok_type == TokType.T_KEYWORD:
@@ -229,29 +222,6 @@ class Parser:
                 return self.for_stmt()
         return fatal(f"Unexpected token {curr.tok_type}:{curr.text} in procedural statement")
 
-    def get_type(self) -> str:
-        """
-        //- type= built-in type | user-defined type
-        """
-        curr = self.queue.curr_token()
-        if curr.tok_type != TokType.T_KEYWORD:
-            fatal(f"Unknown type {curr}")
-        self.next_token()
-        return curr.text
-
-    def get_id(self, type_str: str) -> Optional[ASTNode]:
-        curr = self.queue.curr_token()
-        if curr.tok_type != TokType.T_IDENT:
-            return None
-        self.next_token()
-        node = ASTNode(NodeType.A_IDENT)
-        node.sym = Symbol(
-            name = curr.text,
-            sym_type = SymType.S_LOCAL,
-            val_type = ValType(type_str),
-        )
-        return node
-
     def statement_block(self) -> Optional[ASTNode]:
         """
         //- statement_block= LBRACE procedural_stmt* RBRACE
@@ -260,21 +230,17 @@ class Parser:
         self.lbrace()
         if self.rbrace(False):
             return None
-        node = self.declaration_stmts()
-        proc = self.procedural_stmts()
-        if node is None:
-            node = proc
-        else:
-            node = ASTNode(NodeType.A_GLUE, left=node, right=proc)
+        node = self.declaration_stmt_list()
+        proc = self.procedural_stmt_list()
         self.rbrace()
+        node.args.extend(proc.args)
         return node
 
     def print_statement(self) -> ASTNode:
         self.match_kw(Keyword.PRINTF)
         self.lparen()
         left = self.factor()
-        assert left.op == NodeType.A_LITERAL
-        assert left.string != ""
+        assert isinstance(left, LiteralNode) and left.string != ""
         self.comma()
         right = self.expression()
         self.rparen()
@@ -282,18 +248,6 @@ class Parser:
         if right.val_type == ValType.FLOAT32:
             right = cast_node(right, ValType.FLOAT64)
         return PrintfNode(left, right)
-
-    def function_call(self) -> ASTNode:
-        """
-        //- function_call= IDENT LPAREN expression_list? RPAREN SEMI
-        """
-        name = self.queue.curr_token().text
-        self.match_type(TokType.T_IDENT)
-        self.lparen()
-        args = None if self.rparen(False) else self.expression_list()
-        self.rparen()
-        self.semi()
-        return CallNode(name, args)
 
     def assign_stmt(self) -> ASTNode:
         """
@@ -365,6 +319,8 @@ class Parser:
         left, curr_op = None, self.match_ops(*Operator.unary_ops)
         if curr_op is None: # 没有前缀运算符
             left, curr_op = self.factor(), self.match_infix()
+        elif curr_op.value == OpCode.SUB:
+            curr_op.value = OpCode.NEG
         while curr_op is not None: # 表达式未结束
             left, curr_op = self.infix_expression(left, curr_op)
         return left
@@ -382,41 +338,24 @@ class Parser:
 
     def factor(self) -> Optional[ASTNode]:
         """
-        //- factor= NUMBER
-        //-       | TRUE
-        //-       | FALSE
+        //- factor= number
+        //-       | string
+        //-       | "true"
+        //-       | "false"
+        //-       | "null"
         //-       | variable
+        //-       | call
         """
         curr = self.queue.curr_token()
-        if curr.tok_type == TokType.T_IDENT:
+        node = self.literal(curr)
+        if node:
+            self.next_token()
+            return node
+        elif curr.tok_type == TokType.T_IDENT:
             if self.lparen(False):
-                return self.function_call()
+                return self.function_call(curr)
             else:
-                return self.variable()
-        elif curr.tok_type in (TokType.T_INTEGER, TokType.T_FLOAT):
-            node = ASTNode(NodeType.A_LITERAL)
-            node.number = curr.value
-            node.val_type = ValType.FLOAT64
-            if curr.tok_type == TokType.T_INTEGER:
-                node.val_type = fit_int_type(curr.value)
-            self.next_token()
-            return node
-        elif curr.tok_type == TokType.T_STRING:
-            node = ASTNode(NodeType.A_LITERAL)
-            node.string = curr.text
-            node.val_type = ValType.STR
-            self.next_token()
-            return node
-        elif curr.tok_type == TokType.T_KEYWORD:
-            node = ASTNode(NodeType.A_LITERAL)
-            if curr.text == "null":
-                node.val_type = ValType.VOID
-            elif curr.text in ("true", "false"):
-                node.val_type = ValType.BOOL
-            else:
-                fatal(f"Unexpected token {curr} in factor")
-            self.next_token()
-            return node
+                return self.variable(curr)
         elif curr.tok_type == TokType.T_OPERATOR:
             if curr.value == OpCode.LPAREN:
                 self.lparen()
@@ -426,20 +365,54 @@ class Parser:
             elif curr.value in (OpCode.SUB, OpCode.ADD, OpCode.NOT, OpCode.INVERT):
                 self.next_token()
                 op = NodeType(curr.value)
-                node = ASTNode(op, right = self.factor())
+                node = UnaryOp(op, self.factor())
                 return node
         return fatal(f"Unexpected token {curr} in factor")
 
-    def variable(self) -> ASTNode:
+    @staticmethod
+    def literal(curr: Token) -> Optional[ASTNode]:
+        if curr.tok_type in (TokType.T_INTEGER, TokType.T_FLOAT):
+            node = LiteralNode(curr.text)
+            node.number = curr.value
+            node.val_type = ValType.FLOAT64
+            if curr.tok_type == TokType.T_INTEGER:
+                node.val_type = fit_int_type(curr.value)
+            return node
+        elif curr.tok_type == TokType.T_STRING:
+            node = LiteralNode(curr.text)
+            return node
+        elif curr.tok_type == TokType.T_KEYWORD:
+            node = LiteralNode(curr.text)
+            if curr.text == "null":
+                node.val_type = ValType.VOID
+            elif curr.text in ("true", "false"):
+                node.val_type = ValType.BOOL
+                node.number = 1 if curr.text == "true" else 0
+            else:
+                fatal(f"Unexpected token {curr} in literal")
+            return node
+        return None
+
+    def variable(self, curr: Token) -> ASTNode:
         """
         //- variable= IDENT
         """
-        curr = self.queue.curr_token()
         self.match_type(TokType.T_IDENT)
-        node = ASTNode(NodeType.A_IDENT)
-        node.string = curr.text
-        node.sym = self.scope.find_symbol(node.string)
-        if not node.sym:
-            fatal(f"Unknown variable {node.string}")
-        node.val_type = node.sym.val_type
+        node = VariableNode(curr.text)
+        sym = curr_scope.find_symbol(curr.text)
+        if not sym:
+            fatal(f"Unknown variable {curr.text}")
+        node.set_sym(sym)
         return node
+
+
+    def function_call(self, curr: Token) -> ASTNode:
+        """
+        //- function_call= IDENT LPAREN expression_list? RPAREN SEMI
+        """
+        args = None
+        if not self.rparen(False):
+            args = self.expression_list()
+            self.rparen()
+        self.semi()
+        return CallNode(curr.text, args)

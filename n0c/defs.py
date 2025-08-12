@@ -1,5 +1,4 @@
-import os
-import sys
+import os, sys
 from typing import Optional
 
 if sys.version_info >= (3, 11):
@@ -180,9 +179,10 @@ def is_logical(code: int) -> bool:
 
 
 class Operator(Token):
+    value: OpCode = 0
     _prece: int = -1
     _unary: bool = False
-    unary_ops = (OpCode.NEG, OpCode.NOT, OpCode.INVERT)
+    unary_ops = (OpCode.SUB, OpCode.NEG, OpCode.NOT, OpCode.INVERT)
     precedences = {
         OpCode.NOOP: 0,
         OpCode.AND: 10, OpCode.OR: 10, OpCode.XOR: 10,
@@ -197,7 +197,7 @@ class Operator(Token):
         OpCode.POW: 100,
     }
 
-    def __init__(self, text: str, value: int):
+    def __init__(self, text: str, value: OpCode):
         super().__init__(TokType.T_OPERATOR, text)
         self.value = value
 
@@ -206,7 +206,7 @@ class Operator(Token):
         if self._unary:
             return self._unary
         if self.value in self.unary_ops:
-            self._unary = True
+            self._unary = (self.value != OpCode.SUB)
         return self._unary
 
     @property
@@ -292,12 +292,10 @@ class Symbol:
     sym_type: SymType
     val_type: ValType
     init_val = ""
-    params = []
 
-    def __init__(self, name: str, sym_type: SymType, val_type: ValType):
-        self.name = name
+    def __init__(self, name: str, val_type: ValType, sym_type: SymType):
+        self.name, self.val_type = name, val_type
         self.sym_type = sym_type
-        self.val_type = val_type
 
 
 class NodeType(IntEnum):
@@ -356,17 +354,31 @@ class NodeType(IntEnum):
 
 class ASTNode:
     op: NodeType
-    left, right = None, None
     val_type: Optional[ValType]
-    sym: Optional[Symbol]
-    number, string = 0, ""
+    left, right = None, None
+    args = []
 
     def __init__(self, op: NodeType, left = None, right = None):
-        self.op, self.sym, self.val_type = op, None, None
+        self.op, self.val_type = op, None
         self.left, self.right = left, right
+        self.args = []
 
     def __repr__(self) -> str:
-        raise NotImplementedError()
+        # Print type if available
+        type_name = self.type_name()
+        if type_name:
+            type_name += " "
+        # Print type and operation name
+        return f"{type_name}{self.op_name()}"
 
     def gen(self) -> int:
         raise NotImplementedError()
+
+    def op_name(self) -> str:
+        return self.op.name[2:]
+
+    def type_name(self) -> str:
+        if not self.val_type:
+            return ""
+        val = self.val_type.value
+        return f"{val}"
