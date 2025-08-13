@@ -64,11 +64,11 @@ class CodeGenerator:
         return idx
 
     def qbe_type(self, val_type: ValType) -> str:
-        idx = self.check_type(val_type)
+        idx = self.check_type(val_type, True)
         return self.qbe_type_names[idx]
 
     def qbe_store_type(self, val_type: ValType) -> str:
-        idx = self.check_type(val_type)
+        idx = self.check_type(val_type, True)
         return self.qbe_store_type_names[idx]
 
     def qbe_load_type(self, val_type: ValType) -> str:

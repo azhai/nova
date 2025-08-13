@@ -10,7 +10,7 @@ from defs import (
 )
 from asts import (
     UnaryOp, BinaryOp, CallNode, LiteralNode, IdentNode, VariableNode,
-    FunctionNode, IfNode, ForNode, WhileNode, PrintfNode
+    FunctionNode, IfNode, ForNode, WhileNode, PrintfNode, AssignNode
 )
 from lexer import Lexer, TokenQueue
 from stmts import fit_int_type, cast_node
@@ -175,7 +175,8 @@ class Parser:
                 break
             var = self.ident_declaration(SymType.S_VAR)
             if self.assign(False):
-                var.assign(self.expression())
+                expr = self.expression()
+                var = AssignNode(var, expr)
             self.semi()
             node.args.append(var)
         return node

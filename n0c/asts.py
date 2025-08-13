@@ -49,6 +49,19 @@ class BinaryOp(ASTNode):
             return -1
 
 
+class AssignNode(ASTNode):
+
+    def __init__(self, left = None, right = None):
+        if left and right:
+            right = cast_node(right, left.sym.val_type)
+        super().__init__(NodeType.A_ASSIGN, left, right)
+
+    def gen(self) -> int:
+        right = gen_ast(self.right)
+        codegen.cg_stor_var(right, self.right.val_type, self.left.sym)
+        return right
+
+
 class BlockNode(ASTNode):
 
     def __init__(self, left = None, right = None):
@@ -57,11 +70,11 @@ class BlockNode(ASTNode):
     def gen(self) -> int:
         # 处理语句块中的所有语句
         stmt_node = self.left
-        last_temp = 0
+        last = 0
         while stmt_node:
-            last_temp = gen_ast(stmt_node)
+            last = gen_ast(stmt_node)
             stmt_node = stmt_node.right
-        return last_temp
+        return last
 
 
 class CallNode(ASTNode):
@@ -145,14 +158,10 @@ class VariableNode(IdentNode):
 
     def gen(self) -> int:
         codegen.cg_add_local(self.sym.val_type, self.sym)
-        if self.left:
-            expr = gen_ast(self.left)
-            codegen.cg_stor_var(expr, self.left.val_type, self.sym)
+        if self.right:
+            expr = gen_ast(self.right)
+            codegen.cg_stor_var(expr, self.right.val_type, self.sym)
         return 0
-
-    def assign(self, expr: ASTNode):
-        self.left = cast_node(expr, self.sym.val_type)
-        return
 
 
 class FunctionNode(IdentNode):
@@ -262,10 +271,6 @@ def gen_ast(node: Optional[ASTNode]) -> int:
         if node.right:
             gen_ast(node.right)
         return 0
-    elif node.op == NodeType.A_ASSIGN:
-        right_temp = gen_ast(node.right)
-        codegen.cg_stor_var(right_temp, node.right.val_type, node.left.sym)
-        return right_temp
     elif node.op == NodeType.A_CAST:
         right_temp = gen_ast(node.right)
         return codegen.cg_cast(right_temp, node.right.val_type, node.val_type)

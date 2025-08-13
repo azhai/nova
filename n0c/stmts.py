@@ -12,6 +12,11 @@ def cast_node(node: ASTNode, new_type: ValType) -> Optional[ASTNode]:
     if node.val_type == new_type:
         return node # 如果类型已经匹配，不需要转换
     # 创建类型转换节点
+    if 0 < node.val_type.bytes() < 4:
+        if node.val_type.is_unsigned():
+            node.val_type = ValType.UINT32
+        else:
+            node.val_type = ValType.INT32
     node = ASTNode(NodeType.A_CAST, right=node)
     node.val_type = new_type
     return node
