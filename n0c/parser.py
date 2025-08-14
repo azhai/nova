@@ -2,7 +2,7 @@
 Note: You can grep '//-' this file to extract the grammar
 """
 
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from defs import (
     NodeType, ValType, TokType, OpCode, Keyword,
@@ -13,8 +13,7 @@ from asts import (
     FunctionNode, IfNode, ForNode, WhileNode, PrintfNode, AssignNode
 )
 from lexer import Lexer, TokenQueue
-from stmts import fit_int_type, cast_node
-from syms import curr_scope
+from stmts import fit_int_type, widen_type
 
 
 class Parser:
@@ -66,6 +65,12 @@ class Parser:
             fatal(f"Unexpected token {curr}")
         return None
 
+    def peek_ops(self, *op_codes, ahead = 1) -> Optional[Operator]:
+        tok = self.queue.get_token(ahead=ahead)
+        if isinstance(tok, Operator) and tok.value in op_codes:
+            return tok
+        return None
+
     def is_eof(self) -> bool:
         return self.match_type(TokType.T_EOF, False)
 
@@ -99,60 +104,40 @@ class Parser:
         """
         //- function_declaration_list= function_declaration*
         """
-        node = None
+        node = ASTNode(NodeType.A_GLUE)
         while not self.is_eof():
-            node = self.function_declaration()
+            decl = self.function_declaration()
+            node.args.append(decl)
         return node
 
-    def function_declaration(self) -> ASTNode:
+    def function_declaration(self) -> FunctionNode:
         """
         //- function_declaration= function_prototype statement_block
         //-                     | function_prototype SEMI
         """
         node = self.function_prototype()
-        if not curr_scope.find_symbol(node.sym.name, SymType.S_FUNC):
-            curr_scope.add_symbol(node.sym, True) # 添加到符号表
+        node.new_symbol()
+        for arg in node.args:
+            if isinstance(arg, IdentNode):
+                VariableNode.from_ident(arg)
+        # if not curr_scope.find_symbol(node.sym.name, SymType.S_FUNC):
+        #     curr_scope.add_symbol(node.sym, True) # 添加到符号表
         if self.semi(False):
             return node
         node.left = self.statement_block()
         return node
 
-    def function_prototype(self) -> ASTNode:
+    def function_prototype(self) -> FunctionNode:
         """
         //- function_prototype= ident_declaration LPAREN ident_declaration_list RPAREN
         //-                   | ident_declaration LPAREN VOID RPAREN
         """
-        node = self.ident_declaration(SymType.S_FUNC)
+        node = self.ident_declaration(is_func=True)
         self.lparen()
         if not self.match_kw(Keyword.VOID, False):
             node.args = self.ident_declaration_list()
         self.rparen()
         return node
-
-    def ident_declaration_list(self) -> List[ASTNode]:
-        """
-        //- ident_declaration_list= ident_declaration (COMMA ident_declaration_list)*
-        """
-        nodes = [self.ident_declaration(), ]
-        while self.comma(False):
-            nodes.append(self.ident_declaration())
-        return nodes
-
-    def ident_declaration(self, sym_type: SymType = SymType.S_LOCAL) -> Optional[ASTNode]:
-        """
-        //- ident_declaration= type IDENT
-        """
-        val_type = self.type_declaration()
-        curr = self.queue.curr_token()
-        if curr.tok_type != TokType.T_IDENT:
-            return None
-        self.next_token()
-        if sym_type == SymType.S_FUNC:
-            return FunctionNode(curr.text, val_type)
-        elif sym_type == SymType.S_VAR:
-            return VariableNode(curr.text, val_type)
-        else:
-            return IdentNode(curr.text, val_type)
 
     def type_declaration(self) -> ValType:
         """
@@ -164,6 +149,29 @@ class Parser:
         self.next_token()
         return ValType(curr.text)
 
+    def ident_declaration_list(self) -> List[ASTNode]:
+        """
+        //- ident_declaration_list= ident_declaration (COMMA ident_declaration_list)*
+        """
+        nodes = [self.ident_declaration(), ]
+        while self.comma(False):
+            nodes.append(self.ident_declaration())
+        return nodes
+
+    def ident_declaration(self, is_func = False) -> Union[None, IdentNode, FunctionNode]:
+        """
+        //- ident_declaration= type IDENT
+        """
+        val_type = self.type_declaration()
+        curr = self.queue.curr_token()
+        if curr.tok_type != TokType.T_IDENT:
+            return None
+        self.next_token()
+        if is_func:
+            return FunctionNode(curr.text, val_type)
+        else:
+            return IdentNode(curr.text, val_type)
+
     def declaration_stmt_list(self) -> ASTNode:
         """
         //- declaration_stmt_list= (ident_declaration ASSIGN expression SEMI)+
@@ -173,12 +181,12 @@ class Parser:
             curr = self.queue.curr_token()
             if not curr.is_type():
                 break
-            var = self.ident_declaration(SymType.S_VAR)
+            decl = self.ident_declaration()
             if self.assign(False):
                 expr = self.expression()
-                var = AssignNode(var, expr)
+                decl = VariableNode.from_ident(decl, expr)
             self.semi()
-            node.args.append(var)
+            node.args.append(decl)
         return node
 
     def procedural_stmt_list(self) -> ASTNode:
@@ -197,7 +205,7 @@ class Parser:
         """
         解析单个过程语句，可能返回None
         //- procedural_stmt= ( print_stmt
-        //-                  | assign_stmt
+        //-                  | short_assign_stmt
         //-                  | if_stmt
         //-                  | while_stmt
         //-                  | for_stmt
@@ -208,10 +216,12 @@ class Parser:
         if curr.tok_type == TokType.T_OPERATOR and curr.value == OpCode.RBRACE:
             return None
         if curr.tok_type == TokType.T_IDENT:
-            if self.lparen(False):
-                return self.function_call(curr)
+            if self.peek_ops(OpCode.LBRACE):
+                proc = self.function_call(curr)
             else:
-                return self.assign_stmt()
+                proc = self.short_assign_stmt()
+                self.semi()
+            return proc
         if curr.tok_type == TokType.T_KEYWORD:
             if curr.text == Keyword.PRINTF.value:
                 return self.print_statement()
@@ -247,28 +257,27 @@ class Parser:
         self.rparen()
         self.semi()
         if right.val_type == ValType.FLOAT32:
-            right = cast_node(right, ValType.FLOAT64)
+            right = widen_type(right, ValType.FLOAT64)
         return PrintfNode(left, right)
 
-    def assign_stmt(self) -> ASTNode:
+    def short_assign_stmt(self) -> AssignNode:
         """
-        //- assign_stmt= variable ASSIGN expression SEMI
+        //- short_assign_stmt= variable ASSIGN expression
         """
-        left = self.expression()
+        curr = self.queue.curr_token()
+        left = self.variable(curr)
         self.assign()
         right = self.expression()
-        self.semi()
-        node = ASTNode(NodeType.A_ASSIGN, left=left, right=right)
-        return node
+        return AssignNode(left, right)
 
-    def if_stmt(self) -> ASTNode:
+    def if_stmt(self) -> IfNode:
         """
         //- if_stmt= IF LPAREN relational_expression RPAREN statement_block
         //-          (ELSE statement_block)?
         """
         self.match_kw(Keyword.IF)
         self.lparen()
-        cond = self.expression()
+        cond = self.expression(min_op=OpCode.LOG_OR)
         self.rparen()
         then_stmt = self.statement_block()
         else_stmt = None
@@ -276,42 +285,50 @@ class Parser:
             else_stmt = self.statement_block()
         return IfNode(cond, then_stmt, else_stmt)
 
-    def for_stmt(self) -> ASTNode:
-        """
-        //- for_stmt= FOR LPAREN assign_stmt relational_expression SEMI
-        //-           short_assign_stmt RPAREN statement_block
-        """
-        self.match_kw(Keyword.FOR)
-        self.lparen()
-        init = None if self.semi(False) else self.expression()
-        cond = None if self.semi(False) else self.expression()
-        incr = None if self.rparen(False) else self.expression()
-        body = self.statement_block()
-        return ForNode(cond, init, incr, body)
-
-    def while_stmt(self) -> ASTNode:
+    def while_stmt(self) -> WhileNode:
         """
         //- while_stmt= WHILE LPAREN relational_expression RPAREN statement_block
         """
         self.match_kw(Keyword.WHILE)
         self.lparen()
-        cond = self.expression()
+        cond = self.expression(min_op=OpCode.LOG_OR)
         self.rparen()
         body = self.statement_block()
         return WhileNode(cond, body)
+
+    def for_stmt(self) -> ForNode:
+        """
+        //- for_stmt= FOR LPAREN short_assign_stmt SEMI relational_expression SEMI
+        //-           short_assign_stmt RPAREN statement_block
+        """
+        self.match_kw(Keyword.FOR)
+        self.lparen()
+        cond, init, incr = None, None, None
+        if not self.semi(False):
+            init = self.short_assign_stmt()
+            self.semi()
+        if not self.semi(False):
+            cond = self.expression(min_op=OpCode.LOG_OR)
+            self.semi()
+        if not self.rparen(False):
+            incr = self.short_assign_stmt()
+            self.rparen()
+        body = self.statement_block()
+        return ForNode(cond, init, body, incr)
 
     def expression_list(self) -> ASTNode:
         """
         //- expression_list= expression (COMMA expression_list)*
         """
         expr = self.expression()
-        node = ASTNode(NodeType.A_GLUE, left=expr)
+        node = ASTNode(NodeType.A_GLUE)
+        node.args.append(expr)
         while self.comma(False):
             expr = self.expression()
-            node = ASTNode(NodeType.A_GLUE, left=expr, right=node)
+            node.args.append(expr)
         return node
 
-    def expression(self) -> ASTNode:
+    def expression(self, min_op = 0) -> ASTNode:
         """
         //- expression= (prefix_op factor
         //-                      | factor)
@@ -323,6 +340,8 @@ class Parser:
         elif curr_op.value == OpCode.SUB:
             curr_op.value = OpCode.NEG
         while curr_op is not None: # 表达式未结束
+            if curr_op.prece < min_op:
+                fatal(f"The expression operator {curr_op.name} is out of range.")
             left, curr_op = self.infix_expression(left, curr_op)
         return left
 
@@ -371,47 +390,48 @@ class Parser:
         return fatal(f"Unexpected token {curr} in factor")
 
     @staticmethod
-    def literal(curr: Token) -> Optional[ASTNode]:
-        if curr.tok_type in (TokType.T_INTEGER, TokType.T_FLOAT):
+    def literal(curr: Token) -> Optional[LiteralNode]:
+        if curr.tok_type == TokType.T_STRING:
+            node = LiteralNode(curr.text)
+            return node
+        elif curr.tok_type in (TokType.T_INTEGER, TokType.T_FLOAT):
             node = LiteralNode(curr.text)
             node.number = curr.value
-            node.val_type = ValType.FLOAT64
+            node.val_type = ValType.FLOAT32
             if curr.tok_type == TokType.T_INTEGER:
                 node.val_type = fit_int_type(curr.value)
             return node
-        elif curr.tok_type == TokType.T_STRING:
-            node = LiteralNode(curr.text)
-            return node
-        elif curr.tok_type == TokType.T_KEYWORD:
+        elif curr.tok_type in (TokType.T_BOOL, TokType.T_VOID):
             node = LiteralNode(curr.text)
             if curr.text == "null":
                 node.val_type = ValType.VOID
             elif curr.text in ("true", "false"):
                 node.val_type = ValType.BOOL
-                node.number = 1 if curr.text == "true" else 0
+                node.number = curr.value
             else:
                 fatal(f"Unexpected token {curr} in literal")
             return node
         return None
 
-    def variable(self, curr: Token) -> ASTNode:
+    def variable(self, curr: Token) -> IdentNode:
         """
         //- variable= IDENT
         """
         self.match_type(TokType.T_IDENT)
-        node = VariableNode(curr.text)
-        sym = curr_scope.find_symbol(curr.text)
+        node = IdentNode(curr.text)
+        sym = node.get_symbol()
         if not sym:
             fatal(f"Unknown variable {curr.text}")
-        node.set_sym(sym)
+        elif sym.sym_type != SymType.S_VAR:
+            fatal(f"Symbol {curr.text} is not a variable")
         return node
 
 
-    def function_call(self, curr: Token) -> ASTNode:
+    def function_call(self, curr: Token) -> CallNode:
         """
         //- function_call= IDENT LPAREN expression_list? RPAREN SEMI
         """
-        args = None
+        args = []
         if not self.rparen(False):
             args = self.expression_list()
             self.rparen()

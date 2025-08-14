@@ -56,7 +56,7 @@ class Scope:
             while obj.parent is not None:
                 obj = obj.parent
         if sym.name in obj.sym_table:
-            fatal(f"Symbol '{sym.name}' already declared in current scope")
+            fatal(f"Symbol {sym.name} already exists")
         obj.sym_table[sym.name] = sym
 
 

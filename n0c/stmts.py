@@ -1,25 +1,51 @@
 from typing import Optional, Union
 
 from defs import (
-    ASTNode, NodeType, ValType, Symbol, SymType,
+    ASTNode, NodeType, ValType, SymType, fatal,
     is_comparison, is_arithmetic, is_logical
 )
 
 
 def cast_node(node: ASTNode, new_type: ValType) -> Optional[ASTNode]:
     if not node or not new_type:
-        return None
-    if node.val_type == new_type:
-        return node # 如果类型已经匹配，不需要转换
+        return node
     # 创建类型转换节点
     if 0 < node.val_type.bytes() < 4:
         if node.val_type.is_unsigned():
             node.val_type = ValType.UINT32
         else:
             node.val_type = ValType.INT32
-    node = ASTNode(NodeType.A_CAST, right=node)
-    node.val_type = new_type
-    return node
+    if node.val_type == new_type:
+        return node # 如果类型已经匹配，不需要转换
+    new_node = ASTNode(NodeType.A_CAST, right=node)
+    new_node.val_type = new_type
+    return new_node
+
+
+def widen_type(node: ASTNode, new_type: ValType) -> Optional[ASTNode]:
+    if node.val_type == new_type:
+        return node
+    if node.val_type == ValType.VOID:
+        fatal("cannot widen anything of type void")
+    if new_type == ValType.BOOL:
+        return None
+    val_type = node.val_type
+    # 整数和浮点数比较，使用浮点数的类型
+    if new_type.is_float() and (val_type.is_integer() or val_type.is_unsigned()):
+        return cast_node(node, new_type)
+    bs1, bs2 = val_type.bytes(), new_type.bytes()
+    if bs1 == 0 or bs2 == 0: # 有一个不能拓宽的类型
+        return None
+    if bs2 < bs1:
+        return node
+    if node.op == NodeType.A_LITERAL:
+        if new_type.is_unsigned() and node.number < 0:
+            fatal(f"Cannot cast negative literal value {node.number} to be unsigned")
+        node.val_type = new_type
+        return node
+    if val_type.is_unsigned() != new_type.is_unsigned():
+        return None
+    return cast_node(node, new_type)
 
 
 def adjust_binary_node(node: ASTNode, force = False) -> ASTNode:
@@ -34,26 +60,35 @@ def adjust_binary_node(node: ASTNode, force = False) -> ASTNode:
     node.left = adjust_binary_node(node.left)
     node.right = adjust_binary_node(node.right)
 
-    if is_arithmetic(node.op.value) or is_logical(node.op.value):
-        if node.right and node.right.val_type:
-            node.val_type = node.right.val_type
-    elif node.op == NodeType.A_ASSIGN and node.right:
-        node.val_type = node.right.val_type
-    elif node.op == NodeType.A_IDENT and node.sym:
-        node.val_type = node.sym.val_type
-    elif node.op == NodeType.A_CALL and node.sym:
-        if node.sym.sym_type == SymType.S_FUNC:
-            node.val_type = node.sym.val_type
-    elif node.op == NodeType.A_LITERAL:
-        if node.string == "" and isinstance(node.number, int):
-            node.val_type = fit_int_type(node.number)
-    elif node.op == NodeType.A_CAST and node.right:
-        if node.right.string == "" and isinstance(node.right.number, int):
-            node.right.val_type = fit_int_type(node.right.number)
+    left = widen_type(node.left, node.right.val_type)
+    if left is not None:
+        node.left = left
+    right = widen_type(node.right, node.left.val_type)
+    if right is not None:
+        node.right = right
+    node.val_type = node.left.val_type
     return node
 
+    # if is_arithmetic(node.op.value) or is_logical(node.op.value):
+    #     if node.right and node.right.val_type:
+    #         node.val_type = node.right.val_type
+    # elif node.op == NodeType.A_ASSIGN and node.right:
+    #     node.val_type = node.right.val_type
+    # elif node.op == NodeType.A_IDENT and node.sym:
+    #     node.val_type = node.sym.val_type
+    # elif node.op == NodeType.A_CALL and node.sym:
+    #     if node.sym.sym_type == SymType.S_FUNC:
+    #         node.val_type = node.sym.val_type
+    # elif node.op == NodeType.A_LITERAL:
+    #     if node.string == "" and isinstance(node.number, int):
+    #         node.val_type = fit_int_type(node.number)
+    # elif node.op == NodeType.A_CAST and node.right:
+    #     if node.right.string == "" and isinstance(node.right.number, int):
+    #         node.right.val_type = fit_int_type(node.right.number)
+    # return node
 
-def widen_type(t1, t2: ValType) -> Optional[ValType]:
+
+def adjust_type(t1, t2: ValType) -> Optional[ValType]:
     if t1 == t2:
         return t1
     if t1 in (ValType.VOID, ValType.BOOL):

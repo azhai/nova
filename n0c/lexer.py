@@ -40,7 +40,7 @@ class Lexer:
         'b': ["bool"],
         'd': ["def"],
         'e': ["enum", "else"],
-        'f': ["for", "fn", "float64", "float32", "false"],
+        'f': ["for", "fn", "flt64", "flt32", "false"],
         'i': ["int8", "int64", "int32", "int16", "in", "if"],
         'l': ["let"],
         'm': ["match"],
@@ -247,14 +247,21 @@ class TokenQueue:
     def remain(self):
         return len(self.tokens) - self.offset
 
-    def curr_token(self):
-        if 0 <= self.offset < len(self.tokens):
-            return self.tokens[self.offset]
+    def get_token(self, ahead = 0):
+        offset = self.offset + ahead
+        if 0 <= offset < len(self.tokens):
+            return self.tokens[offset]
         return Token(TokType.T_EOF)
+
+    def curr_token(self):
+        return self.get_token()
+
+    def peek_token(self):
+        return self.get_token(ahead=1)
 
     def next_token(self):
         self.offset += 1
-        return self.curr_token()
+        return self.get_token()
 
     def dump_tokens(self, out=None):
         if not out:

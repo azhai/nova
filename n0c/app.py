@@ -20,26 +20,20 @@
 import argparse
 from typing import Optional
 
-from defs import ASTNode, Output
+from defs import parse_cmd_args, ASTNode, Output
 from asts import dump_ast, gen_ast
 from lexer import Lexer
 from parser import Parser
 from cgen import codegen
-from syms import gen_global_syms
+# from syms import gen_global_syms
 
 
 def main():
-    # 解析命令行参数
-    parser = argparse.ArgumentParser(description="Alic Compiler")
-    parser.add_argument("input_file", help="Input source file")
-    parser.add_argument("-o", "--output", help="Output file (default: out.q)")
-    parser.add_argument("-d", "--debug", action="store_true", help="Enable debug output")
-    args = parser.parse_args()
-
-    outfile = args.output or "out.q"
-    logfile = "stdout" if args.debug else "/dev/null"
+    config = parse_cmd_args()
+    outfile = config.output or "out.q"
+    logfile = "stdout" if config.debug else "/dev/null"
     output = Output(outfile, logfile)
-    input_file = args.input_file or "tests/test001.al"
+    input_file = config.input_file or "tests/test001.al"
 
     # 生成代码
     print("\nParsing...", file=output.logFp)
@@ -68,7 +62,7 @@ def parse_program(filename: str, output: Output) -> Optional[ASTNode]:
     parser.queue.dump_tokens(output.logFp)
 
     ast = parser.parse_program()
-    gen_global_syms()
+    # gen_global_syms()
     return ast
 
 

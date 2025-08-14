@@ -1,3 +1,4 @@
+import argparse
 import os, sys
 from typing import Optional
 
@@ -7,8 +8,28 @@ else:
     from enum_v3_11 import IntEnum, StrEnum
 
 
+config: argparse.Namespace
+
+
+def parse_cmd_args() -> argparse.Namespace:
+    """ 解析命令行参数 """
+    global config
+    parser = argparse.ArgumentParser(description="Alic Compiler")
+    parser.add_argument("input_file", help="Input source file")
+    parser.add_argument("-o", "--output", help="Output file (default: out.q)")
+    parser.add_argument("-d", "--debug", action="store_true", help="Enable debug output")
+    config = parser.parse_args()
+    config.line_no = 0
+    return config
+
+
 def fatal(msg: str):
-    raise Exception(f"Fatal error: {msg}")
+    if config.debug:
+        raise Exception(f"Fatal error: {msg}")
+    else:
+        file, line = config.input_file, config.line_no
+        print(f"{file} line {line}: {msg}", file=sys.stderr)
+        sys.exit(1)
 
 
 def notice(msg: str):
@@ -232,8 +253,10 @@ class Keyword(StrEnum):
 def create_keyword_token(word: str) -> Token:
     if word == "null":
         token = Token(TokType.T_VOID, word)
-    elif word == "true" or word == "false":
+    elif word in ("true", "false"):
         token = Token(TokType.T_BOOL, word)
+        if word == "true":
+            token.value = 1
     else:
         token = Token(TokType.T_KEYWORD, word)
     return token
@@ -255,8 +278,8 @@ class ValType(StrEnum):
     UINT16 = "uint16"
     UINT32 = "uint32"
     UINT64 = "uint64"
-    FLOAT32 = "float32"
-    FLOAT64 = "float64"
+    FLOAT32 = "flt32"
+    FLOAT64 = "flt64"
 
     def is_integer(self) -> bool:
         return self.name.startswith("INT")
@@ -291,6 +314,7 @@ class Symbol:
     name: str
     sym_type: SymType
     val_type: ValType
+    has_addr: bool = False
     init_val = ""
 
     def __init__(self, name: str, val_type: ValType, sym_type: SymType):
@@ -364,12 +388,8 @@ class ASTNode:
         self.args = []
 
     def __repr__(self) -> str:
-        # Print type if available
-        type_name = self.type_name()
-        if type_name:
-            type_name += " "
         # Print type and operation name
-        return f"{type_name}{self.op_name()}"
+        return f"{self.op_name()} {self.type_name()}"
 
     def gen(self) -> int:
         raise NotImplementedError()
