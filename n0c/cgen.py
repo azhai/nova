@@ -122,11 +122,11 @@ class CodeGenerator:
         # value = quote_string(value)
         print(f"data $L{label} = {{ b {value}, b 0 }}", file=self.output)
 
-    def cg_ret(self, node=None):
-        if node:
-            print(f"  ret {node}", file=self.output)
-        else:
-            print(f"  ret", file=self.output)
+    # def cg_ret(self, node=None):
+    #     if node:
+    #         print(f"  ret {node}", file=self.output)
+    #     else:
+    #         print(f"  ret", file=self.output)
 
     def cg_jump(self, l: int) -> None:
         print(f"  jmp @L{l}", file=self.output)
@@ -238,34 +238,15 @@ class CodeGenerator:
                 fatal(f"Not sure how to narrow from {val_type} to {new_type}")
         return t
 
-
-        # if val_type.is_float():
-        #     if new_type.is_float():
-        #         qtype = self.qbe_type(new_type)
-        #         print(f"  %.t{t_new} ={qtype} copy %.t{t}", file=self.output)
-        #     else:
-        #         qtype = self.qbe_type(val_type)
-        #         new_qtype = self.qbe_type(new_type)
-        #         print(f"  %.t{t_new} ={new_qtype} trunc {qtype} %.t{t}", file=self.output)
-        # else:
-        #     if new_type.is_float():
-        #         qtype = self.qbe_type(val_type)
-        #         new_qtype = self.qbe_type(new_type)
-        #         print(f"  %.t{t_new} ={new_qtype} extend {qtype} %.t{t}", file=self.output)
-        #     else:
-        #         qtype = self.qbe_ext_type(val_type)
-        #         new_qtype = self.qbe_type(new_type)
-        #         print(f"  %.t{t_new} ={new_qtype} {qtype} %.t{t}", file=self.output)
-        # return t_new
-
-    def cg_call(self, sym: Symbol, numargs: int, arglist: List[int], typelist: List[ValType]) -> int:
-        t = self.gen_temp()
-        args = []
-        for i in range(numargs):
-            qtype = self.qbe_type(typelist[i])
-            args.append(f"{qtype} %.t{arglist[i]}")
-        args_str = ", ".join(args)
-        print(f"  %.t{t} =l call ${sym.name}({args_str})", file=self.output)
+    def cg_call(self, sym: Symbol, params: List[str]) -> int:
+        if sym.val_type == ValType.VOID:
+            t, ret = 0, ""
+        else:
+            t = self.gen_temp()
+            qtype = self.qbe_type(sym.val_type)
+            ret = f"%.t{t} ={qtype} "
+        params = ", ".join(params)
+        print(f"  {ret}call ${sym.name}({params})", file=self.output)
         return t
 
     def cg_glob_sym(self, sym: Symbol) -> None:

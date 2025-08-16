@@ -7,7 +7,6 @@ from defs import (
 )
 from cgen import codegen, get_str_lit_label
 from stmts import adjust_binary_node, widen_type
-from syms import curr_scope
 
 
 class UnaryOp(ASTNode):
@@ -46,66 +45,6 @@ class BinaryOp(ASTNode):
         else:
             fatal(f"Binary op {self.op} is not supported")
             return -1
-
-
-class AssignNode(ASTNode):
-
-    def __init__(self, left = None, right = None):
-        if left and right:
-            val_type, new_type = right.val_type, left.sym.val_type
-            right = widen_type(right, new_type)
-            if right is None:
-                fatal(f"Incompatible types {val_type} vs {new_type}")
-        super().__init__(NodeType.A_ASSIGN, left, right)
-
-    def gen(self) -> int:
-        gen_ast(self.left)
-        val_type, sym = self.left.val_type, self.left.sym
-        right = gen_ast(self.right)
-        codegen.cg_stor_var(right, val_type, sym)
-        return right
-
-
-class BlockNode(ASTNode):
-
-    def __init__(self, left = None, right = None):
-        super().__init__(NodeType.A_GLUE, left, right)
-
-    def gen(self) -> int:
-        # 处理语句块中的所有语句
-        stmt_node = self.left
-        last = 0
-        while stmt_node:
-            last = gen_ast(stmt_node)
-            stmt_node = stmt_node.right
-        return last
-
-
-class CallNode(ASTNode):
-    sym: Optional[Symbol] = None
-
-    def __init__(self, name, node):
-        super().__init__(NodeType.A_CALL)
-        self.name, self.args = name, node.args or []
-
-    def __repr__(self) -> str:
-        return f"{self.op_name()} {self.name}(...)"
-
-    def gen(self) -> int:
-        if not self.sym or self.sym.sym_type != SymType.S_FUNC:
-            func_name = self.sym.name if self.sym else "?"
-            fatal(f"{func_name} is not a function")
-        # 处理参数
-        args: list[int] = []
-        arg_types: list[ValType] = []
-        arg_node = self.left
-        while arg_node:
-            arg_temp = gen_ast(arg_node)
-            args.append(arg_temp)
-            arg_types.append(arg_node.val_type)
-            arg_node = arg_node.right
-        # 调用函数
-        return codegen.cg_call(self.sym, len(args), args, arg_types)
 
 
 class LiteralNode(ASTNode):
@@ -147,32 +86,18 @@ class IdentNode(ASTNode):
             return codegen.cg_load_var(self.sym)
         return 0
 
-    def new_symbol(self):
+    def new_symbol(self, has_addr = False) -> Optional[Symbol]:
         if not self.name or not self.val_type:
             return None
         if self.sym is None:
             self.sym = Symbol(self.name, self.val_type, self.sym_type)
-            self.sym.has_addr = True
-            curr_scope.add_symbol(self.sym, self.sym_type == SymType.S_FUNC)
-        return self.sym
-
-    def get_symbol(self):
-        if not self.name:
-            return None
-        if not self.sym:
-            self.sym = curr_scope.find_symbol(self.name)
-            if self.sym:
-                # self.sym.has_addr = False
-                self.val_type = self.sym.val_type
+            self.sym.has_addr = has_addr
         return self.sym
 
     def set_symbol(self, sym):
         self.sym = sym
-        if sym and sym.name:
-            self.name = sym.name
         if sym and sym.val_type:
             self.val_type = sym.val_type
-        return self.sym
 
     def add_right(self, right: ASTNode):
         if right is None:
@@ -190,9 +115,7 @@ class VariableNode(IdentNode):
     @classmethod
     def from_ident(cls, node: IdentNode, right = None):
         obj = cls(node.name, node.val_type)
-        if right:
-            obj.add_right(right)
-        obj.new_symbol()
+        obj.add_right(right)
         return obj
 
     def gen(self) -> int:
@@ -214,14 +137,73 @@ class FunctionNode(IdentNode):
 
     def gen(self) -> int:
         # 生成函数前导
-        curr_scope.new_scope(self.sym.name)
         codegen.cg_func_preamble(self)
         # 生成函数体
         result = gen_ast(self.left)
         # 生成函数后导
         codegen.cg_func_postamble()
-        curr_scope.end_scope()
         return result
+
+
+class AssignNode(ASTNode):
+    name: str
+    sym: Optional[Symbol] = None
+
+    @classmethod
+    def create(cls, node: IdentNode, right = None):
+        val_type, new_type = right.val_type, node.sym.val_type
+        right = widen_type(right, new_type)
+        if right is None:
+            fatal(f"Incompatible types {val_type} vs {new_type}")
+        obj = cls(NodeType.A_ASSIGN, right=right)
+        obj.name, obj.sym = node.name, node.sym
+        return obj
+
+    def gen(self) -> int:
+        right = gen_ast(self.right)
+        codegen.cg_stor_var(right, self.sym.val_type, self.sym)
+        return right
+
+
+class BlockNode(ASTNode):
+
+    def __init__(self, left = None, right = None):
+        super().__init__(NodeType.A_GLUE, left, right)
+
+    def gen(self) -> int:
+        # 处理语句块中的所有语句
+        stmt_node = self.left
+        last = 0
+        while stmt_node:
+            last = gen_ast(stmt_node)
+            stmt_node = stmt_node.right
+        return last
+
+
+class CallNode(ASTNode):
+    sym: Optional[Symbol] = None
+
+    def __init__(self, name, node: Optional[ASTNode] = None):
+        super().__init__(NodeType.A_CALL)
+        self.name, self.args = name, node.args or []
+
+    def __repr__(self) -> str:
+        return f"{self.op_name()} {self.name}(...)"
+
+    def set_symbol(self, sym):
+        self.sym = sym
+        if sym and sym.val_type:
+            self.val_type = sym.val_type
+
+    def gen(self) -> int:
+        # 处理参数
+        params = []
+        for arg in self.args:
+            t = gen_ast(arg)
+            qtype = codegen.qbe_type(arg.val_type)
+            params.append(f"{qtype} %.t{t}")
+        # 调用函数
+        return codegen.cg_call(self.sym, params)
 
 
 class IfNode(ASTNode):

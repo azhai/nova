@@ -14,13 +14,16 @@ from asts import (
 )
 from lexer import Lexer, TokenQueue
 from stmts import fit_int_type, widen_type
+from syms import Scope
 
 
 class Parser:
     queue: TokenQueue = None
+    scope: Scope = None
 
     def __init__(self, lexer: Lexer = None):
         self.queue = TokenQueue(lexer.scan())
+        self.scope = Scope("global")
 
     def next_token(self) -> Optional[Token]:
         tk = self.queue.next_token()
@@ -116,15 +119,20 @@ class Parser:
         //-                     | function_prototype SEMI
         """
         node = self.function_prototype()
-        node.new_symbol()
-        for arg in node.args:
-            if isinstance(arg, IdentNode):
-                VariableNode.from_ident(arg)
-        # if not curr_scope.find_symbol(node.sym.name, SymType.S_FUNC):
-        #     curr_scope.add_symbol(node.sym, True) # 添加到符号表
-        if self.semi(False):
+        sym = node.new_symbol()
+        if not sym:
             return node
-        node.left = self.statement_block()
+        self.scope.add_symbol(sym, is_global=True)
+        self.scope = self.scope.new_scope(node.sym.name)
+        for i, arg in enumerate(node.args):
+            if isinstance(arg, IdentNode):
+                arg = VariableNode.from_ident(arg)
+                sym = arg.new_symbol()
+                self.scope.add_symbol(sym)
+                node.args[i] = arg
+        if not self.semi(False):
+            node.left = self.statement_block()
+        self.scope = self.scope.end_scope()
         return node
 
     def function_prototype(self) -> FunctionNode:
@@ -185,6 +193,9 @@ class Parser:
             if self.assign(False):
                 expr = self.expression()
                 decl = VariableNode.from_ident(decl, expr)
+                sym = decl.new_symbol(has_addr=True)
+                if sym:
+                    self.scope.add_symbol(sym)
             self.semi()
             node.args.append(decl)
         return node
@@ -216,7 +227,7 @@ class Parser:
         if curr.tok_type == TokType.T_OPERATOR and curr.value == OpCode.RBRACE:
             return None
         if curr.tok_type == TokType.T_IDENT:
-            if self.peek_ops(OpCode.LBRACE):
+            if self.peek_ops(OpCode.LPAREN):
                 proc = self.function_call(curr)
             else:
                 proc = self.short_assign_stmt()
@@ -265,10 +276,10 @@ class Parser:
         //- short_assign_stmt= variable ASSIGN expression
         """
         curr = self.queue.curr_token()
-        left = self.variable(curr)
+        var = self.variable(curr)
         self.assign()
         right = self.expression()
-        return AssignNode(left, right)
+        return AssignNode.create(var, right)
 
     def if_stmt(self) -> IfNode:
         """
@@ -372,7 +383,7 @@ class Parser:
             self.next_token()
             return node
         elif curr.tok_type == TokType.T_IDENT:
-            if self.lparen(False):
+            if self.peek_ops(OpCode.LPAREN):
                 return self.function_call(curr)
             else:
                 return self.variable(curr)
@@ -419,11 +430,8 @@ class Parser:
         """
         self.match_type(TokType.T_IDENT)
         node = IdentNode(curr.text)
-        sym = node.get_symbol()
-        if not sym:
-            fatal(f"Unknown variable {curr.text}")
-        elif sym.sym_type != SymType.S_VAR:
-            fatal(f"Symbol {curr.text} is not a variable")
+        sym = self.scope.get_symbol(node.name, SymType.S_VAR)
+        node.set_symbol(sym)
         return node
 
 
@@ -431,9 +439,15 @@ class Parser:
         """
         //- function_call= IDENT LPAREN expression_list? RPAREN SEMI
         """
-        args = []
+        self.match_type(TokType.T_IDENT)
+        self.lparen()
+        args = None
         if not self.rparen(False):
             args = self.expression_list()
             self.rparen()
         self.semi()
-        return CallNode(curr.text, args)
+        node = CallNode(curr.text, args)
+        # 获取函数原型
+        sym = self.scope.get_symbol(node.name, SymType.S_FUNC)
+        node.set_symbol(sym)
+        return node

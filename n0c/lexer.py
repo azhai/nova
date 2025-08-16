@@ -168,7 +168,7 @@ class Lexer:
         if is_float:
             token = Token(TokType.T_FLOAT, temp)
             token.value = float(temp)
-        elif temp.isnumeric():
+        elif temp.isnumeric() or temp[0] == '-' and temp[1:].isnumeric():
             token = Token(TokType.T_INTEGER, temp)
             token.value = int(temp)
         else:

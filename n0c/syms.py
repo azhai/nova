@@ -3,6 +3,10 @@ from typing import Optional
 from defs import Symbol, SymType, fatal
 from cgen import cg_glob_sym
 
+
+all_scopes = []
+
+
 def gen_global_syms():
     if not all_scopes:
         return
@@ -10,6 +14,7 @@ def gen_global_syms():
     for sym in sym_table.values():
         if sym.sym_type == SymType.S_VAR:
             cg_glob_sym(sym)
+
 
 class Scope:
     parent = None
@@ -24,27 +29,35 @@ class Scope:
 
     def new_scope(self, name: str):
         """ 创建新的作用域 """
-        global curr_scope
-        curr_scope = Scope(name, self)
-        return curr_scope
+        return Scope(name, self)
 
     def end_scope(self):
         """ 结束当前作用域，返回上一个 """
-        global curr_scope
-        curr_scope = self.parent if self.parent else self
-        return curr_scope
+        return self.parent if self.parent else self
 
-    def find_symbol(self, name: str, sym_type = None) -> Optional[Symbol]:
+    def find_symbol(self, name: str) -> Optional[Symbol]:
         """ 在所有作用域中查找符号，从当前作用域向上查找 """
         obj = self
         while obj is not None:
             sym = obj.sym_table.get(name)
             if sym:
-                if sym_type and sym.sym_type != sym_type:
-                    fatal(f"{name} is not a {sym_type.name}")
                 return sym
             obj = obj.parent
         return None
+
+    def get_symbol(self, name: str, sym_type = None) -> Optional[Symbol]:
+        """ 在所有作用域中查找符号，从当前作用域向上查找 """
+        sym = self.find_symbol(name)
+        type_name = "symbol"
+        if sym_type == SymType.S_FUNC:
+            type_name = "function"
+        elif sym_type == SymType.S_VAR:
+            type_name = "variable"
+        if not sym:
+            fatal(f"Unknown {type_name} {name}")
+        if sym_type and sym.sym_type != sym_type:
+            fatal(f"Symbol {name} is not a {type_name}")
+        return sym
 
     def add_symbol(self, sym: Symbol, is_global: bool = False) -> None:
         """将符号添加到当前作用域"""
@@ -55,10 +68,9 @@ class Scope:
         if is_global and sym.sym_type != SymType.S_LOCAL:
             while obj.parent is not None:
                 obj = obj.parent
-        if sym.name in obj.sym_table:
+        if sym.name not in obj.sym_table:
+            obj.sym_table[sym.name] = sym
+        elif is_global and sym.sym_type == SymType.S_FUNC:
+            fatal(f"Multiple declarations for {sym.name}()")
+        else:
             fatal(f"Symbol {sym.name} already exists")
-        obj.sym_table[sym.name] = sym
-
-
-all_scopes = []
-curr_scope = Scope("global")
