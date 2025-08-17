@@ -1,12 +1,27 @@
 import sys
-from typing import Optional
+from typing import Optional, List
 
+from utils import fatal, quote_string
 from defs import (
-    ASTNode, NodeType, ValType, SymType, Symbol, fatal,
-    is_arithmetic, is_logical, is_comparison, quote_string
+    ASTNode, NodeType, ValType, SymType, Symbol,
+    is_arithmetic, is_logical, is_comparison
 )
 from cgen import codegen, get_str_lit_label
 from stmts import adjust_binary_node, widen_type
+
+
+def get_arg_list(nodes: List[ASTNode], is_call = False) -> str:
+    params = []
+    for arg in nodes:
+        if arg.val_type == ValType.VOID:
+            break
+        qtype = codegen.qbe_type(arg.val_type)
+        if is_call:
+            t = gen_ast(arg)
+            params.append(f"{qtype} %.t{t}")
+        else:
+            params.append(f"{qtype} %{arg.name}")
+    return ", ".join(params)
 
 
 class UnaryOp(ASTNode):
@@ -137,9 +152,12 @@ class FunctionNode(IdentNode):
 
     def gen(self) -> int:
         # 生成函数前导
-        codegen.cg_func_preamble(self)
+        params = get_arg_list(self.args, is_call = False)
+        codegen.cg_func_preamble(self.sym.name, params)
         # 生成函数体
-        result = gen_ast(self.left)
+        result = 0
+        if self.left:
+            result = gen_ast(self.left)
         # 生成函数后导
         codegen.cg_func_postamble()
         return result
@@ -183,9 +201,9 @@ class BlockNode(ASTNode):
 class CallNode(ASTNode):
     sym: Optional[Symbol] = None
 
-    def __init__(self, name, node: Optional[ASTNode] = None):
+    def __init__(self, name, args: List[ASTNode]):
         super().__init__(NodeType.A_CALL)
-        self.name, self.args = name, node.args or []
+        self.name, self.args = name, args
 
     def __repr__(self) -> str:
         return f"{self.op_name()} {self.name}(...)"
@@ -196,13 +214,7 @@ class CallNode(ASTNode):
             self.val_type = sym.val_type
 
     def gen(self) -> int:
-        # 处理参数
-        params = []
-        for arg in self.args:
-            t = gen_ast(arg)
-            qtype = codegen.qbe_type(arg.val_type)
-            params.append(f"{qtype} %.t{t}")
-        # 调用函数
+        params = get_arg_list(self.args, is_call = True)
         return codegen.cg_call(self.sym, params)
 
 

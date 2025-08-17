@@ -1,9 +1,7 @@
 from typing import Optional, Union
 
-from defs import (
-    ASTNode, NodeType, ValType, SymType, fatal,
-    is_comparison, is_arithmetic, is_logical
-)
+from utils import fatal
+from defs import ASTNode, NodeType, ValType, is_comparison
 
 
 def cast_node(node: ASTNode, new_type: ValType) -> Optional[ASTNode]:

@@ -17,19 +17,14 @@
 - `app.py` ：实现命令行参数解析和编译流程控制
 """
 
-import argparse
-from typing import Optional
-
-from defs import parse_cmd_args, ASTNode, Output
+from utils import config, Output
 from asts import dump_ast, gen_ast
 from lexer import Lexer
 from parser import Parser
 from cgen import codegen
-# from syms import gen_global_syms
 
 
 def main():
-    config = parse_cmd_args()
     outfile = config.output or "out.q"
     logfile = "stdout" if config.debug else "/dev/null"
     output = Output(outfile, logfile)
@@ -37,7 +32,12 @@ def main():
 
     # 生成代码
     print("\nParsing...", file=output.logFp)
-    ast = parse_program(input_file, output)
+    lexer = Lexer(input_file)
+    parser = Parser(lexer)
+    print("\nTokens in {}:".format(input_file), file=output.logFp)
+    parser.queue.dump_tokens(output.logFp)
+
+    ast = parser.parse_program()
     if ast:
         print("\nAST nodes in {}:\n".format(input_file), file=output.logFp)
         dump_ast(ast, out=output.logFp)
@@ -53,17 +53,6 @@ def main():
     # 清理
     output.close()
     return
-
-
-def parse_program(filename: str, output: Output) -> Optional[ASTNode]:
-    lexer = Lexer(filename)
-    parser = Parser(lexer)
-    print("\nTokens in {}:".format(filename), file=output.logFp)
-    parser.queue.dump_tokens(output.logFp)
-
-    ast = parser.parse_program()
-    # gen_global_syms()
-    return ast
 
 
 if __name__ == "__main__":

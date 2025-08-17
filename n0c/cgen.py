@@ -2,7 +2,8 @@ import sys
 from io import StringIO
 from typing import List
 
-from defs import Symbol, NodeType, ASTNode, ValType, fatal
+from utils import fatal
+from defs import Symbol, NodeType, ASTNode, ValType
 
 str_literal_labels = {}
 
@@ -100,16 +101,9 @@ class CodeGenerator:
         for value, label in str_literal_labels.items():
             self.cg_str_lit(value, label)
 
-    def cg_func_preamble(self, node: ASTNode) -> None:
-        print(f"export function ${node.sym.name}(", end="", file=self.output)
-        for i, param in enumerate(node.args):
-            if i > 0:
-                print(", ", end="", file=self.output)
-            if param.val_type == ValType.VOID:
-                break
-            qtype = self.qbe_type(param.val_type)
-            print(f"{qtype} %{param.name}", end="", file=self.output)
-        print(") {\n@START", file=self.output)
+    def cg_func_preamble(self, name: str, params: str = "") -> None:
+        print(f"export function ${name}({params})", end="", file=self.output)
+        print(" {\n@START", file=self.output)
 
     def cg_func_postamble(self) -> None:
         print("@END\n  ret\n}", file=self.output)
@@ -238,14 +232,13 @@ class CodeGenerator:
                 fatal(f"Not sure how to narrow from {val_type} to {new_type}")
         return t
 
-    def cg_call(self, sym: Symbol, params: List[str]) -> int:
+    def cg_call(self, sym: Symbol, params: str = "") -> int:
         if sym.val_type == ValType.VOID:
             t, ret = 0, ""
         else:
             t = self.gen_temp()
             qtype = self.qbe_type(sym.val_type)
             ret = f"%.t{t} ={qtype} "
-        params = ", ".join(params)
         print(f"  {ret}call ${sym.name}({params})", file=self.output)
         return t
 

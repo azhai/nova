@@ -1,6 +1,7 @@
-from typing import Optional
+from typing import Optional, List
 
-from defs import Symbol, SymType, fatal
+from utils import fatal
+from defs import ASTNode, Symbol, SymType, ValType
 from cgen import cg_glob_sym
 
 
@@ -59,18 +60,60 @@ class Scope:
             fatal(f"Symbol {name} is not a {type_name}")
         return sym
 
-    def add_symbol(self, sym: Symbol, is_global: bool = False) -> None:
+    def update_symbol(self, name: str, **kwargs) -> Optional[Symbol]:
+        sym = self.sym_table.get(name)
+        if not sym:
+            fatal(f"Can not find symbol {name}")
+            return None
+        sym.__dict__.update(kwargs)
+        return sym
+
+    def add_symbol(self, sym: Symbol, is_global: bool = False):
         """将符号添加到当前作用域"""
         if not sym or not sym.name:
             fatal("Invalid symbol")
-        obj = self
+        obj, global_func = self, False
         # 如果是全局符号，添加到全局符号列表
         if is_global and sym.sym_type != SymType.S_LOCAL:
+            if sym.sym_type == SymType.S_FUNC:
+                global_func = True
             while obj.parent is not None:
                 obj = obj.parent
-        if sym.name not in obj.sym_table:
+        old = obj.sym_table.get(sym.name)
+        if old is None or global_func and (old.has_body is False):
             obj.sym_table[sym.name] = sym
-        elif is_global and sym.sym_type == SymType.S_FUNC:
+            return
+        if global_func:
             fatal(f"Multiple declarations for {sym.name}()")
         else:
             fatal(f"Symbol {sym.name} already exists")
+
+    @staticmethod
+    def check_func_params(sym: Symbol, val_type: ValType, params: List[Symbol]):
+        if val_type != sym.val_type:
+            fatal(f"{sym.name}() declaration has different type than previous: {val_type} vs {sym.val_type}")
+        if len(sym.args) != len(params):
+            fatal(f"{sym.name}() declaration: # params different than previous")
+        for i, arg in enumerate(sym.args):
+            try:
+                param = params[i]
+            except IndexError:
+                fatal(f"{sym.name}() declaration: # params different than previous")
+                break
+            if param.name != arg.name:
+                fatal(f"{sym.name}() declaration: param name mismatch {param.name} vs {arg.name}")
+            elif param.val_type != arg.val_type:
+                fatal(f"{sym.name}() declaration: param {arg.name} type mismatch {param.val_type} vs {arg.val_type}")
+
+    @staticmethod
+    def check_call_params(sym: Symbol, params: List[ASTNode]):
+        if len(sym.args) > len(params):
+            fatal(f"{sym.name}() declaration: # params different than previous")
+        for i, arg in enumerate(sym.args):
+            try:
+                param = params[i]
+            except IndexError:
+                fatal(f"{sym.name}() declaration: # params different than previous")
+                break
+            if param.val_type != arg.val_type:
+                fatal(f"{sym.name}() declaration: param {arg.name} type mismatch {param.val_type} vs {arg.val_type}")

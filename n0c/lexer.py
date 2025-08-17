@@ -1,6 +1,9 @@
 import sys
 
-from defs import TokType, OpCode, Token, Operator, fatal, create_keyword_token
+from utils import config, fatal
+from defs import (
+    TokType, OpCode, Token, Operator, create_keyword_token
+)
 
 NumberMaxLen = 30
 OperatorMaxLen = 3
@@ -250,7 +253,9 @@ class TokenQueue:
     def get_token(self, ahead = 0):
         offset = self.offset + ahead
         if 0 <= offset < len(self.tokens):
-            return self.tokens[offset]
+            tok = self.tokens[offset]
+            config.line_no = tok.line_no # 记录行号
+            return tok
         return Token(TokType.T_EOF)
 
     def curr_token(self):

@@ -63,7 +63,7 @@ Sym *add_symbol(char *name, int symtype, Type *type) {
 
   this= add_sym_to(&Symhead, name, symtype, type);
   if (this==NULL)
-    fatal("symbol %s already exists\n", name);
+    fatal("Symbol %s already exists\n", name);
   return (this);
 }
 

@@ -45,13 +45,13 @@ int add_function(ASTnode * func, ASTnode * paramlist) {
       // Parameter names differ
       if (strcmp(this->name, paramlist->strlit))
 	fatal("%s() declaration: param name mismatch %s vs %s\n",
-	      func->strlit, this->name, paramlist->strlit);
+	      func->strlit, paramlist->strlit, this->name);
 
       // Parameter types differ
       if (this->type != paramlist->type)
-	fatal("%s() declaration: param type mismatch %s vs %s\n",
-	      func->strlit, get_typename(this->type),
-	      get_typename(paramlist->type));
+	fatal("%s() declaration: param %s type mismatch %s vs %s\n",
+	      func->strlit, paramlist->name, get_typename(paramlist->type),
+	      get_typename(this->type));
 
       // Move up to the next parameter in both lists
       this = this->next;
@@ -84,7 +84,7 @@ void declare_function(ASTnode *f) {
   // Add the function declaration to the symbol table.
   // Die if a previous declaration had a statement block
   if (add_function(f, f->left))
-    fatal("multiple declarations for %s()\n", f->strlit);
+    fatal("Multiple declarations for %s()\n", f->strlit);
 
   // Find the function's symbol entry and mark that it
   // does have a statement block

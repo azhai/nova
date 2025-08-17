@@ -4,9 +4,10 @@ Note: You can grep '//-' this file to extract the grammar
 
 from typing import List, Optional, Union
 
+from utils import fatal
 from defs import (
     NodeType, ValType, TokType, OpCode, Keyword,
-    Token, SymType, Operator, ASTNode, fatal
+    Token, SymType, Operator, ASTNode
 )
 from asts import (
     UnaryOp, BinaryOp, CallNode, LiteralNode, IdentNode, VariableNode,
@@ -119,20 +120,33 @@ class Parser:
         //-                     | function_prototype SEMI
         """
         node = self.function_prototype()
-        sym = node.new_symbol()
-        if not sym:
-            return node
-        self.scope.add_symbol(sym, is_global=True)
-        self.scope = self.scope.new_scope(node.sym.name)
+        sym = self.scope.find_symbol(node.name)
+        self.scope = self.scope.new_scope(node.name)
+
+        has_body, arg_syms = False, []
         for i, arg in enumerate(node.args):
-            if isinstance(arg, IdentNode):
-                arg = VariableNode.from_ident(arg)
-                sym = arg.new_symbol()
-                self.scope.add_symbol(sym)
-                node.args[i] = arg
+            arg = VariableNode.from_ident(arg)
+            arg_sym = arg.new_symbol()
+            self.scope.add_symbol(arg_sym)
+            arg_syms.append(arg_sym)
+            node.args[i] = arg
         if not self.semi(False):
+            has_body = True
+
+        if not sym:
+            sym = node.new_symbol()
+            sym.args, sym.has_body = arg_syms, has_body
+            self.scope.parent.add_symbol(sym, is_global=True)
+        elif has_body and sym.has_body:
+            fatal(f"Multiple declarations for {sym.name}()")
+        else:
+            self.scope.check_func_params(sym, node.val_type, arg_syms)
+
+        if has_body:
             node.left = self.statement_block()
+            self.scope.parent.update_symbol(sym.name, has_body=has_body)
         self.scope = self.scope.end_scope()
+        node.set_symbol(sym)
         return node
 
     def function_prototype(self) -> FunctionNode:
@@ -163,7 +177,10 @@ class Parser:
         """
         nodes = [self.ident_declaration(), ]
         while self.comma(False):
-            nodes.append(self.ident_declaration())
+            item = self.ident_declaration()
+            if item is None:
+                break
+            nodes.append(item)
         return nodes
 
     def ident_declaration(self, is_func = False) -> Union[None, IdentNode, FunctionNode]:
@@ -441,13 +458,15 @@ class Parser:
         """
         self.match_type(TokType.T_IDENT)
         self.lparen()
-        args = None
+        param_list = None
         if not self.rparen(False):
-            args = self.expression_list()
+            param_list = self.expression_list()
             self.rparen()
         self.semi()
+        args = param_list.args or []
         node = CallNode(curr.text, args)
         # 获取函数原型
         sym = self.scope.get_symbol(node.name, SymType.S_FUNC)
+        self.scope.check_call_params(sym, args)
         node.set_symbol(sym)
         return node

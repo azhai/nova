@@ -17,6 +17,7 @@
 .git/
 .idea/
 .vscode/
+.zig-cache/
 __pycache__/
 alpy/out.*
 bin/*
