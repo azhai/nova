@@ -1,8 +1,5 @@
 all: runtests
-	./runtests
-
-apy: runtests
-	./runtests "../alpy/app.py"
+	./runtests "../n0c/app.py"
 
 ac0: runtests
 	./runtests "../bin/ac0"

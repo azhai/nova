@@ -9,6 +9,8 @@ if [ ! -f "$EXE" ]
 then (cd ../alc; make)
 fi
 
+mkdir -p ssa/
+
 # Try to use each input source file
 for i in test*.al
 # We can't do anything if there's no file to test against
