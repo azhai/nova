@@ -2,7 +2,7 @@
 Note: You can grep '//-' this file to extract the grammar
 """
 
-from typing import List, Optional, Union
+from typing import Optional, List, Union
 
 from utils import fatal
 from defs import (
@@ -27,6 +27,7 @@ class Parser:
         self.scope = Scope("global")
 
     def next_token(self) -> Optional[Token]:
+        """ 获取下一个token，跳过注释 """
         tk = self.queue.next_token()
         while True:
             if tk.tok_type not in (TokType.T_COMMENT, TokType.T_WHITESPACE):
@@ -34,6 +35,7 @@ class Parser:
             tk = self.queue.next_token()
 
     def match_type(self, token_type: TokType, throw: bool = True) -> bool:
+        """ 当前token是否指定类型，如果是，则前进一步，如果否，则可选择报错退出 """
         curr = self.queue.curr_token()
         if curr.tok_type == token_type:
             self.next_token()
@@ -43,6 +45,7 @@ class Parser:
         return False
 
     def match_kw(self, kw: Keyword, throw: bool = True) -> bool:
+        """ 当前token是否指定的关键词 """
         curr = self.queue.curr_token()
         if curr.tok_type == TokType.T_KEYWORD and curr.text == kw.value:
             self.next_token()
@@ -52,6 +55,7 @@ class Parser:
         return False
 
     def match_ops(self, *op_codes, **kwargs) -> Optional[Operator]:
+        """ 当前token是否在指定的操作符之内 """
         curr = self.queue.curr_token()
         if isinstance(curr, Operator) and curr.value in op_codes:
             self.next_token()
@@ -70,6 +74,7 @@ class Parser:
         return None
 
     def peek_ops(self, *op_codes, ahead = 1) -> Optional[Operator]:
+        """ 看下一个token是否在指定操作符之内 """
         tok = self.queue.get_token(ahead=ahead)
         if isinstance(tok, Operator) and tok.value in op_codes:
             return tok

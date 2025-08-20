@@ -47,7 +47,7 @@ class Scope:
         return None
 
     def get_symbol(self, name: str, sym_type = None) -> Optional[Symbol]:
-        """ 在所有作用域中查找符号，从当前作用域向上查找 """
+        """ 在所有作用域中查找符号，并检查符号类型 """
         sym = self.find_symbol(name)
         type_name = "symbol"
         if sym_type == SymType.S_FUNC:
@@ -61,15 +61,17 @@ class Scope:
         return sym
 
     def update_symbol(self, name: str, **kwargs) -> Optional[Symbol]:
+        """ 更新符号部分属性 """
         sym = self.sym_table.get(name)
         if not sym:
             fatal(f"Can not find symbol {name}")
             return None
         sym.__dict__.update(kwargs)
+        self.sym_table[name] = sym
         return sym
 
     def add_symbol(self, sym: Symbol, is_global: bool = False):
-        """将符号添加到当前作用域"""
+        """ 将符号添加到当前作用域 """
         if not sym or not sym.name:
             fatal("Invalid symbol")
         obj, global_func = self, False
@@ -90,6 +92,7 @@ class Scope:
 
     @staticmethod
     def check_func_params(sym: Symbol, val_type: ValType, params: List[Symbol]):
+        """ 检查函数原型和实现的参数、返回是否一致 """
         if val_type != sym.val_type:
             fatal(f"{sym.name}() declaration has different type than previous: {val_type} vs {sym.val_type}")
         if len(sym.args) != len(params):
@@ -107,6 +110,7 @@ class Scope:
 
     @staticmethod
     def check_call_params(sym: Symbol, params: List[ASTNode]):
+        """ 检查函数原型和调用的参数是否符合 """
         if len(sym.args) > len(params):
             fatal(f"{sym.name}() declaration: # params different than previous")
         for i, arg in enumerate(sym.args):

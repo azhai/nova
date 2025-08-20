@@ -25,6 +25,7 @@ def fatal(msg: str):
 
 
 def notice(msg: str):
+    """ 只输出信息不终止运行，用于警告或调试 """
     print(f"Notice error: {msg}", file=sys.stderr)
 
 
@@ -57,6 +58,7 @@ def quote_string(s: str) -> str:
 
 
 class Output:
+    """ 输出与日志 """
     outFp, logFp = None, None
 
     def __init__(self, outfile: str, logfile: str = ""):
@@ -86,4 +88,3 @@ class Output:
             self.outFp.close()
         if self.logFp:
             self.logFp.close()
-

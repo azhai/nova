@@ -111,9 +111,10 @@ def is_logical(code: int) -> bool:
 
 
 class Operator(Token):
-    value: OpCode = 0
+    value: OpCode = OpCode.NOOP
     _prece: int = -1
     _unary: bool = False
+    # 单目与双目运算符优先级，同级优先左结合
     unary_ops = (OpCode.SUB, OpCode.NEG, OpCode.NOT, OpCode.INVERT)
     precedences = {
         OpCode.NOOP: 0,
@@ -150,7 +151,8 @@ class Operator(Token):
 
 
 class Keyword(StrEnum):
-    PRINTF = "printf"
+    VOID = "void"
+    BOOL = "bool"
     IF = "if"
     ELSE = "else"
     WHILE = "while"
@@ -159,7 +161,7 @@ class Keyword(StrEnum):
     BREAK = "break"
     CONTINUE = "continue"
     RETURN = "return"
-    VOID = "void"
+    PRINTF = "printf"
 
 def create_keyword_token(word: str) -> Token:
     if word == "null":
@@ -227,8 +229,8 @@ class Symbol:
     val_type: ValType
     has_addr: bool = False
     has_body: bool = False # 是否有函数体
-    init_val = ""
     args: List["Symbol"] = []
+    init_val = "" # 默认值，类似json格式
 
     def __init__(self, name: str, val_type: ValType, sym_type: SymType):
         self.name, self.val_type = name, val_type

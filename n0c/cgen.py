@@ -8,6 +8,7 @@ from defs import Symbol, NodeType, ASTNode, ValType
 str_literal_labels = {}
 
 def get_str_lit_label(value: str) -> int:
+    """ 固定字符串的标号，从1即L1开始 """
     label = str_literal_labels.get(value, 0)
     if label <= 0:
         label = len(str_literal_labels) + 1
@@ -50,9 +51,9 @@ class CodeGenerator:
     }
 
     def __init__(self):
-        self.output = StringIO()
-        self.next_temp = 1
-        self.label_id = 1
+        self.output = StringIO() # 字符串缓冲区
+        self.next_temp = 1 # 变量标号，从%.t1开始
+        self.label_id = 1  # 字符串标号，从L1开始
 
     def check_type(self, val_type: ValType, unsigned = False) -> int:
         idx = self.type_indexes.get(val_type.name, -1)
@@ -63,7 +64,6 @@ class CodeGenerator:
         elif not unsigned and idx >= 8:
             idx -= 8
         return idx
-        # fatal("not support unsigned type")
 
     def qbe_type(self, val_type: ValType) -> str:
         idx = self.check_type(val_type, False)
@@ -108,6 +108,10 @@ class CodeGenerator:
     def cg_func_postamble(self) -> None:
         print("@END\n  ret\n}", file=self.output)
 
+    def cg_print(self, label: int, temp: int, val_type: ValType) -> None:
+        qtype = self.qbe_type(val_type)
+        print(f"  call $printf(l $L{label}, {qtype} %.t{temp})", file=self.output)
+
     def cg_label(self, l: int) -> None:
         print(f"@L{l}", file=self.output)
 
@@ -116,18 +120,51 @@ class CodeGenerator:
         # value = quote_string(value)
         print(f"data $L{label} = {{ b {value}, b 0 }}", file=self.output)
 
-    # def cg_ret(self, node=None):
-    #     if node:
-    #         print(f"  ret {node}", file=self.output)
-    #     else:
-    #         print(f"  ret", file=self.output)
+    def cg_load_lit(self, value, val_type: ValType) -> int:
+        t = self.gen_temp()
+        qtype = self.qbe_type(val_type)
+        if val_type.is_float():
+            print(f"  %.t{t} ={qtype} copy {qtype}_{value}", file=self.output)
+        else:
+            print(f"  %.t{t} ={qtype} copy {value}", file=self.output)
+        return t
+
+    def cg_load_var(self, sym: Symbol) -> int:
+        t_new = self.gen_temp()
+        qtype = self.qbe_type(sym.val_type)
+        if sym.has_addr:
+            load_qtype = self.qbe_load_type(sym.val_type)
+            print(f"  %.t{t_new} ={qtype} load{load_qtype} %{sym.name}", file=self.output)
+        else:
+            print(f"  %.t{t_new} ={qtype} copy %{sym.name}", file=self.output)
+        return t_new
+
+    def cg_stor_var(self, t: int, val_type: ValType, sym: Symbol) -> None:
+        qtype = self.qbe_store_type(val_type)
+        if sym.has_addr:
+            print(f"  store{qtype} %.t{t}, %{sym.name}", file=self.output)
+        else:
+            print(f"  %{sym.name} ={qtype} copy %.t{t}", file=self.output)
+
+    def cg_add_local(self, val_type: ValType, sym: Symbol) -> None:
+        size = 4
+        if val_type in (ValType.INT64, ValType.UINT64, ValType.FLOAT64):
+            size = 8
+        print(f"  %{sym.name} =l alloc{size} 1", file=self.output)
+
+    def cg_ret(self, node=None):
+        if node:
+            print(f"  ret {node}", file=self.output)
+        else:
+            print(f"  ret", file=self.output)
 
     def cg_jump(self, l: int) -> None:
         print(f"  jmp @L{l}", file=self.output)
 
-    def cg_print(self, label: int, temp: int, val_type: ValType) -> None:
-        qtype = self.qbe_type(val_type)
-        print(f"  call $printf(l $L{label}, {qtype} %.t{temp})", file=self.output)
+    def cg_if_false(self, t1: int, label: int) -> None:
+        new_label = self.gen_label()
+        print(f"  jnz %.t{t1}, @L{new_label}, @L{label}", file=self.output)
+        self.cg_label(new_label)
 
     def cg_negate(self, t: int, val_type: ValType) -> int:
         qtype = self.qbe_type(val_type)
@@ -170,43 +207,6 @@ class CodeGenerator:
         qtype = self.qbe_type(val_type)
         print(f"  %.t{t_new} =w c{op}{qtype} %.t{t1}, %.t{t2}", file=self.output)
         return t_new
-
-    def cg_if_false(self, t1: int, label: int) -> None:
-        new_label = self.gen_label()
-        print(f"  jnz %.t{t1}, @L{new_label}, @L{label}", file=self.output)
-        self.cg_label(new_label)
-
-    def cg_add_local(self, val_type: ValType, sym: Symbol) -> None:
-        size = 4
-        if val_type in (ValType.INT64, ValType.UINT64, ValType.FLOAT64):
-            size = 8
-        print(f"  %{sym.name} =l alloc{size} 1", file=self.output)
-
-    def cg_load_lit(self, value, val_type: ValType) -> int:
-        t = self.gen_temp()
-        qtype = self.qbe_type(val_type)
-        if val_type.is_float():
-            print(f"  %.t{t} ={qtype} copy {qtype}_{value}", file=self.output)
-        else:
-            print(f"  %.t{t} ={qtype} copy {value}", file=self.output)
-        return t
-
-    def cg_load_var(self, sym: Symbol) -> int:
-        t_new = self.gen_temp()
-        qtype = self.qbe_type(sym.val_type)
-        if sym.has_addr:
-            load_qtype = self.qbe_load_type(sym.val_type)
-            print(f"  %.t{t_new} ={qtype} load{load_qtype} %{sym.name}", file=self.output)
-        else:
-            print(f"  %.t{t_new} ={qtype} copy %{sym.name}", file=self.output)
-        return t_new
-
-    def cg_stor_var(self, t: int, val_type: ValType, sym: Symbol) -> None:
-        qtype = self.qbe_store_type(val_type)
-        if sym.has_addr:
-            print(f"  store{qtype} %.t{t}, %{sym.name}", file=self.output)
-        else:
-            print(f"  %{sym.name} ={qtype} copy %.t{t}", file=self.output)
 
     def cg_cast(self, t: int, val_type: ValType, new_type: ValType) -> int:
         t_new = self.gen_temp()

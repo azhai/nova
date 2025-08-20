@@ -5,6 +5,7 @@ from defs import ASTNode, NodeType, ValType, is_comparison
 
 
 def cast_node(node: ASTNode, new_type: ValType) -> Optional[ASTNode]:
+    """ 转换节点类型 """
     if not node or not new_type:
         return node
     # 创建类型转换节点
@@ -21,6 +22,7 @@ def cast_node(node: ASTNode, new_type: ValType) -> Optional[ASTNode]:
 
 
 def widen_type(node: ASTNode, new_type: ValType) -> Optional[ASTNode]:
+    """ 将节点调整为新类型 """
     if node.val_type == new_type:
         return node
     if node.val_type == ValType.VOID:
@@ -47,6 +49,7 @@ def widen_type(node: ASTNode, new_type: ValType) -> Optional[ASTNode]:
 
 
 def adjust_binary_node(node: ASTNode, force = False) -> ASTNode:
+    """ 递归调整节点树上的类型 """
     # 已经有类型的节点，不需要调整
     if node is None or not force and node.val_type:
         return node
@@ -87,6 +90,7 @@ def adjust_binary_node(node: ASTNode, force = False) -> ASTNode:
 
 
 def adjust_type(t1, t2: ValType) -> Optional[ValType]:
+    """ 双目运算，为两边选一个最小公倍类型 """
     if t1 == t2:
         return t1
     if t1 in (ValType.VOID, ValType.BOOL):
@@ -108,6 +112,7 @@ def adjust_type(t1, t2: ValType) -> Optional[ValType]:
 
 
 def fit_int_type(num: int, unsigned = False) -> ValType:
+    """ 为数值挑选最小的整数类型 """
     if num < 0:
         if num >= 0 - 2**7:
             return ValType.INT8

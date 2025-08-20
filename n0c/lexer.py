@@ -1,4 +1,5 @@
 import sys
+from typing import Optional, Iterator, List, Union
 
 from utils import config, fatal
 from defs import (
@@ -98,18 +99,18 @@ class Lexer:
         """ 从当前位置继续扫描和读取token """
         self.open_file()
         while True:
-            if self.buf == "":
+            if self.buf == "": # 本行（跨行文本除外）token处理结束
                 self.next_line()
-                if self.buf == "":
+                if self.buf == "": # 已处理文件最后一行
                     break
             c = self.buf[0]
-            token = self.scan_once(c)
+            token = self.scan_once(c) # 一次最多获取一个token
             if token:
                 yield token
             self.buf = self.buf.lstrip()
         self.close_file()
 
-    def scan_once(self, c: str):
+    def scan_once(self, c: str) -> Optional[Token]:
         """ 尝试查找一个token，注意以下次序不能更换 """
         token = None
         # 尝试数字或者关键词
@@ -130,87 +131,64 @@ class Lexer:
             token = self.scan_operator(c)
         return token
 
-    def scan_until(self, delim, start):
-        """ 查找右侧定界符，其他字符原样收纳其中，用于代码中的字符串或注释 """
-        if not delim:
-            return None
-        while True:
-            i = self.buf.find(delim, start)
-            if i < 0: # 没找到
-                start = len(self.buf)
-                if self.next_line():
-                    continue
-                else:
-                    break
-            pos = i + len(delim)
-            temp, self.buf = self.buf[:pos], self.buf[pos:]
-            if delim in ("\n", "%)"):
-                token = Token(TokType.T_COMMENT, temp.strip())
-            else:
-                token = Token(TokType.T_STRING, temp)
-            token.line_no = self.line_no
-            return token
-
-    def scan_number(self, c: str):
-        is_float, has_exp, i = False, False, 1
+    def scan_number(self, c: str) -> Optional[Token]:
+        """ 查找表示整数或浮点数的文本，包括二、八、十六进制和科学记数法 """
+        is_float, has_exp = False, False
         negate, zero = c == '-', c == '0'
         size = min(NumberMaxLen, len(self.buf))
+        i = 1 # 传入的参数c是数值第一个字符，不需要检查
         for i in range(i, size):
             c = self.buf[i]
-            if i == 1 and zero and c in ('o', 'O', 'x', 'X'):
+            if i == 1 and zero and c in ('b', 'B', 'o', 'O', 'x', 'X'):
                 return self.scan_hex_oct(c)
+            # 这三个字符只可能在浮点数出现，而且仅一次，但这里未进一步检查次数
             if not is_float and c in ('.', 'e', 'E'):
                 is_float, has_exp = True, c != '.'
+            # 除了开头，只可能出现在科学记数法中E后面，但这里未进一步检查次数和位置
             elif not has_exp and (c in ('-', '+')):
                 i -= 1   # 后面处理时加1，为了和循环正常结束保持一致
                 break
             elif not (c == '_' or c.isdigit()):
                 i -= 1   # 后面处理时加1，为了和循环正常结束保持一致
                 break
-        temp = self.buf[:i+1].replace("_", "")
-        if is_float:
-            token = Token(TokType.T_FLOAT, temp)
-            token.value = float(temp)
-        elif temp.isnumeric() or temp[0] == '-' and temp[1:].isnumeric():
-            token = Token(TokType.T_INTEGER, temp)
-            token.value = int(temp)
-        else:
+        temp = self.buf[:i+1].replace("_", "") # 去除连字符
+        try:
+            if is_float:
+                token = Token(TokType.T_FLOAT, temp)
+                token.value = float(temp)
+            else:
+                token = Token(TokType.T_INTEGER, temp)
+                token.value = int(temp)
+        except:
             return None
         token.line_no = self.line_no
         self.buf = self.buf[i+1:]
         return token
 
-    def scan_hex_oct(self, c: str):
-        token, i, base = None, 2, 16
-        num_chars = "0123456789abcdefABCDEF"
+    def scan_hex_oct(self, c: str) -> Optional[Token]:
+        """ 查找二、八、十六进制整数 """
+        token, base = None, 16
+        valid_chars = "0123456789abcdefABCDEF"
         if c in ('o', 'O'):
-            base, num_chars = 8, "01234567"
+            base, valid_chars = 8, "01234567"
+        elif c in ('b', 'B'):
+            base, valid_chars = 2, "01"
         size = min(NumberMaxLen, len(self.buf))
+        i = 2 # 传入的参数c是数值第二个字符，也不需要检查
         for i in range(i, size):
             c = self.buf[i]
-            if c != '_' and (c not in num_chars):
+            if c != '_' and (c not in valid_chars):
                 i -= 1   # 后面处理时加1，为了和循环正常结束保持一致
                 break
         temp = self.buf[:i+1].replace("_", "")
         token = Token(TokType.T_INTEGER, temp)
-        token.value = int(temp, base)
+        token.value = int(temp, base) # 转为十进制数值
         token.line_no = self.line_no
         self.buf = self.buf[i+1:]
         return token
 
-    def scan_operator(self, c: str):
-        items = self.operators.get(c, [])
-        if not items:
-            return None
-        for text, op in items:
-            if self.buf.startswith(text):
-                token = Operator(text, op.value)
-                token.line_no = self.line_no
-                self.buf = self.buf[len(text):]
-                return token
-        return None
-
-    def scan_keyword(self, c: str):
+    def scan_keyword(self, c: str) -> Optional[Token]:
+        """ 查找关键词，贪婪算法，每组关键词已在Lexer定义中倒序列出 """
         words = self.keywords.get(c, [])
         if not words:
             return None
@@ -222,7 +200,8 @@ class Lexer:
                 return token
         return None
 
-    def scan_ident(self, _: str):
+    def scan_ident(self, _: str) -> Optional[Token]:
+        """ 查找标识符，即变量名、函数名、自定义类型名等 """
         i = 0
         for i, c in enumerate(self.buf):
             if c != '_' and not c.isalnum():
@@ -235,22 +214,61 @@ class Lexer:
             return token
         return None
 
+    def scan_until(self, delim, start) -> Optional[Token]:
+        """ 查找右侧定界符，其他字符原样收纳其中，用于代码中的字符串或注释 """
+        if not delim:
+            return None
+        while True:
+            # 从左定界符之后查找，避免左右定界符一样时死循环
+            i = self.buf.find(delim, start)
+            if i < 0: # 没找到
+                start = len(self.buf)
+                if self.next_line(): # 跨行文本
+                    continue
+                else:
+                    break
+            # 得到的文本temp中包含有左右定界符
+            pos = i + len(delim)
+            temp, self.buf = self.buf[:pos], self.buf[pos:]
+            if delim in ("\n", "%)"):
+                token = Token(TokType.T_COMMENT, temp.strip())
+            else:
+                token = Token(TokType.T_STRING, temp)
+            # 记录行号，在后面环节中报错时使用
+            token.line_no = self.line_no
+            return token
+
+    def scan_operator(self, c: str) -> Optional[Token]:
+        """ 查找已知符号，贪婪算法，即找符合条件最长的一个 """
+        items = self.operators.get(c, [])
+        if not items:
+            return None
+        for text, op in items:
+            if self.buf.startswith(text):
+                token = Operator(text, op.value)
+                token.line_no = self.line_no
+                self.buf = self.buf[len(text):]
+                return token
+        return None
+
 
 class TokenQueue:
+    """ token队列，方便进行peek向后看的操作 """
     tokens = []
     offset: int = 0
 
-    def __init__(self, it = None):
+    def __init__(self, it: Union[Iterator, List, None] = None):
         if it:
             self.tokens = list(it)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.tokens)
 
-    def remain(self):
+    def remain(self) -> int:
         return len(self.tokens) - self.offset
 
-    def get_token(self, ahead = 0):
+    def get_token(self, ahead = 0) -> Token:
+        """ 获取当前或附近的token """
         offset = self.offset + ahead
         if 0 <= offset < len(self.tokens):
             tok = self.tokens[offset]
@@ -258,17 +276,21 @@ class TokenQueue:
             return tok
         return Token(TokType.T_EOF)
 
-    def curr_token(self):
+    def curr_token(self) -> Token:
+        """ 当前token """
         return self.get_token()
 
-    def peek_token(self):
+    def peek_token(self) -> Token:
+        """ 即将到来的token """
         return self.get_token(ahead=1)
 
-    def next_token(self):
+    def next_token(self) -> Token:
+        """ 向后移动并返回token """
         self.offset += 1
         return self.get_token()
 
-    def dump_tokens(self, out=None):
+    def dump_tokens(self, out = None):
+        """ 将所有token按所在代码行输出 """
         if not out:
             out = sys.stdout
         line = 0
