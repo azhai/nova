@@ -1,4 +1,4 @@
-void printf(...);
+%% void printf(...);
 
 void main(void) {
   flt32 fred= 3.14;

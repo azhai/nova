@@ -1,3 +1,5 @@
+%% void printf(...);
+
 void main(void) {
   if (3 > 2) {
     printf("%d\n",100);

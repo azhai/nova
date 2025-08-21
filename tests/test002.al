@@ -1,3 +1,5 @@
+%% void printf(...);
+
 void main(void) {
   uint32 fred = 45;
   printf("%d\n", 32 + 2 * 3 - 5) ;

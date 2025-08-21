@@ -1,6 +1,6 @@
 type FILE;		// An opaque type
 type char= int8 *;	// A type alias
-void printf(...);
+%% void printf(...);
 
 void main(void) {
   char y= 64;

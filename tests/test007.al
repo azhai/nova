@@ -1,3 +1,5 @@
+%% void printf(...);
+
 void main(void) {
   flt32 x= 23.5;
   flt64 y= 300.22;

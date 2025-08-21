@@ -112,11 +112,20 @@ class Scope:
     @staticmethod
     def check_call_params(sym: Symbol, params: List[ASTNode]) -> List[ASTNode]:
         """ 检查函数原型和调用的参数是否符合，之前先将参数按对应名称重组 """
+        if len(sym.args) == 0:
+            return params
         if len(sym.args) > len(params):
             fatal(f"{sym.name}() declaration: # params different than previous")
+        get_name = lambda p, i: p.name if hasattr(p, "name") and p.name else i
+        positions = {get_name(p, i): i for i, p in enumerate(params)}
+        if len(positions) < len(params): # 有重名参数
+            fatal(f"{sym.name}() call: # params used multiple times")
+        result = []
         for i, arg in enumerate(sym.args):
             try:
+                i = positions.get(arg.name, i)
                 param = params[i]
+                result.append(param)
             except IndexError:
                 fatal(f"{sym.name}() declaration: # params different than previous")
                 break
@@ -124,3 +133,4 @@ class Scope:
                 param = widen_type(param, arg.val_type)
             if param.val_type != arg.val_type:
                 fatal(f"{sym.name}() declaration: param {arg.name} type mismatch {param.val_type} vs {arg.val_type}")
+        return result

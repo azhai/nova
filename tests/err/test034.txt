@@ -1,1 +1,1 @@
-test034.al line 7: Unknown variable x
+test034.al line 9: Unknown variable x

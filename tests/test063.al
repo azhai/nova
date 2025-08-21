@@ -1,4 +1,4 @@
-void printf(...);
+%% void printf(...);
 
 void main(void) {
   // For now, don't need assignments on locals

@@ -1,3 +1,5 @@
+%% void printf(...);
+
 void main(void) {
   uint32 mary= 23;
   uint16 fred= 7;

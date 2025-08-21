@@ -1,4 +1,4 @@
-void printf(...);
+%% void printf(...);
 
 void main(void) {
   int16 fred= 5;

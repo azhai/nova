@@ -1,4 +1,4 @@
-void printf(...);
+%% void printf(...);
 
 int32 fred(int32 a, int32 b, int32 c) {
   int32 result = a * 2 + b * 3 + c;

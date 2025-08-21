@@ -1,3 +1,5 @@
+%% void printf(...);
+
 void main(void) {
   int32 i = 0;
 

@@ -1,1 +1,1 @@
-test036.al line 14: parameter a used multiple times
+test036.al line 12: fred() call: # params used multiple times

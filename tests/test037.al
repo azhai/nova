@@ -1,4 +1,4 @@
-void printf(...);
+%% void printf(...);
 
 void fred(int32 x) {
   printf("fred x is %d\n", x);

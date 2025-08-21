@@ -1,13 +1,22 @@
 import argparse
 import os, sys
+import subprocess
+
+
+def sh_exec(cmd: str):
+    opts = {"shell": True, "check": True, "capture_output": True}
+    return subprocess.run(cmd, encoding="utf-8", **opts)
 
 
 def parse_cmd_args() -> argparse.Namespace:
     """ 解析命令行参数 """
     parser = argparse.ArgumentParser(description="Alic Compiler")
-    parser.add_argument("input_file", help="Input source file")
-    parser.add_argument("-o", "--output", help="Output file (default: out.q)")
+    parser.add_argument("input", help="Input source file")
+    parser.add_argument("-o", "--output", help="Output file (default: exec)")
+    parser.add_argument("-t", "--temp", help="Temp qbe file (default: out.q)")
     parser.add_argument("-d", "--debug", action="store_true", help="Enable debug output")
+    parser.add_argument("-s", "--assemble", action="store_true", help="Generate an assemble file")
+    parser.add_argument("-c", "--compile", action="store_true", help="Compile to an executable")
     cfg = parser.parse_args()
     cfg.line_no = 0 # 增加行号属性
     return cfg
@@ -19,7 +28,7 @@ def fatal(msg: str):
     if config.debug:
         raise Exception(f"Fatal error: {msg}")
     else:
-        file, line = config.input_file, config.line_no
+        file, line = config.input, config.line_no
         print(f"{file} line {line}: {msg}", file=sys.stderr)
         sys.exit(1)
 
@@ -59,11 +68,11 @@ def quote_string(s: str) -> str:
 
 class Output:
     """ 输出与日志 """
-    outFp, logFp = None, None
+    tmpFp, logFp = None, None
 
-    def __init__(self, outfile: str, logfile: str = ""):
-        if outfile:
-            self.outFp = self.open(outfile)
+    def __init__(self, tmpfile: str, logfile: str = ""):
+        if tmpfile:
+            self.tmpFp = self.open(tmpfile)
         if logfile:
             self.logFp = self.open(logfile)
 
@@ -84,7 +93,7 @@ class Output:
 
     def close(self):
         """ 关闭文件 """
-        if self.outFp:
-            self.outFp.close()
+        if self.tmpFp:
+            self.tmpFp.close()
         if self.logFp:
             self.logFp.close()

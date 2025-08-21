@@ -5,67 +5,72 @@
 EXE="$1"
 
 # Build our compiler if needed
-if [ ! -f "$EXE" ]
-then (cd ../n1c; make)
+if [ ! -f "$EXE" ]; then
+    (cd ../n1c; make)
 fi
 
 mkdir -p ssa/
 
+runone() {
+    CMD="$EXE -c -o bin -t $2 $1"
+    echo $1 ">" $CMD
+    $CMD 2> error && ./bin > trial 2>> error
+    # $EXE -t $2 $1 2> error && qbe $2 > out.s \
+    #     && cc -o bin out.s && ./bin > trial 2>> error
+}
+
 # Try to use each input source file
-for n in $(seq -f "%03g" 35 38)
-# We can't do anything if there's no file to test against
-do
-  i="test$n.al"
-  j="test$n.txt"
-  k="ssa/test$n.q"
-  if [ ! -f "out/$j" -a ! -f "err/$j" ]
-   then echo "Can't run test on $i, no output or error file!"; exit 1
+for n in $(seq -f "%03g" 36 38); do
 
-   # Output file: compile the source, run it and
-   # capture the output, and compare it against
-   # the known-good output
-   else if [ -f "out/$j" ]
-        then
-	  # Print the test name, compile it with our compiler
-          echo -n $i
-	  $EXE -o $k $i && qbe $k > out.s && cc -o bin out.s
-          ./bin > trial
+    # We can't do anything if there's no file to test against
+    i="test$n.al"
+    j="ssa/test$n.q"
+    k="test$n.txt"
 
-  	  # Compare this agains the correct output
-          cmp -s "out/$j" trial
+    if [ ! -f "out/$k" -a ! -f "err/$k" ]; then
+        echo "Can't run test on $i, no output or error file!"; exit 1
 
-	  # If different, announce failure
-          # and print out the difference
-          if [ "$?" -eq "1" ]
-          then echo ": failed"
-            diff -c "out/$j" trial
-	    # Stop if our 1st argument is "stop"
-	    if [ "$#" -eq 1 ] && [ $1 = "stop" ]
-	    then exit 1
-	    fi
+    # Output file: compile the source, run it and
+    # capture the output, and compare it against
+    # the known-good output
+    else if [ -f "out/$k" ]; then
+        # Print the test name, compile it with our compiler
+        runone $i $j
+        # Compare this agains the correct output
+        cmp -s "out/$k" trial
+
+        # If different, announce failure
+        # and print out the difference
+        if [ "$?" -eq "1" ]; then
+            echo ": failed"
+            diff -c "out/$k" trial
+            # Stop if our 1st argument is "stop"
+            if [ "$#" -eq 1 ] && [ $1 = "stop" ]; then
+                exit 1
+            fi
             echo
-
-	  # No failure, so announce success
-          else echo ": OK"
-          fi
-
-   # Error file: compile the source and
-   # capture the error messages. Compare
-   # against the known-bad output. Same
-   # mechanism as before
-   else if [ -f "err/$j" ]
-        then
-          echo -n $i
-	  $EXE -o /dev/null $i 2> trial
-          cmp -s "err/$j" trial
-          if [ "$?" -eq "1" ]
-          then echo ": failed"
-            diff -c "err/$j" trial
-            echo
-          else echo ": OK"
-          fi
+        # No failure, so announce success
+        else
+            echo ": OK"
         fi
-     fi
-   fi
-   rm -f bin out.[qs] trial
+
+    # Error file: compile the source and
+    # capture the error messages. Compare
+    # against the known-bad output. Same
+    # mechanism as before
+    else if [ -f "err/$k" ]; then
+        runone $i $j
+        cmp -s "err/$k" error
+
+        if [ "$?" -eq "1" ]; then
+            echo ": failed"
+            diff -c "err/$k" error
+            echo
+        else
+            echo ": OK"
+        fi
+
+    fi fi fi
+
+    rm -f bin out.[sq] trial error
 done

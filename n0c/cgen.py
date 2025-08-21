@@ -21,6 +21,7 @@ class CodeGenerator:
         "VOID": 0, "BOOL": 1, "INT8": 2, "INT16": 3,
         "INT32": 4, "INT64": 5, "FLOAT32": 6, "FLOAT64": 7,
         "UINT8": 10, "UINT16": 11, "UINT32": 12, "UINT64": 13,
+        "STR": 5,
     }
     qbe_type_names = [
         "", "w", "w", "w", "w", "l", "s", "d"
@@ -152,14 +153,32 @@ class CodeGenerator:
             size = 8
         print(f"  %{sym.name} =l alloc{size} 1", file=self.output)
 
-    def cg_ret(self, t=None):
-        if t:
-            print(f"  ret %.t{t}", file=self.output)
+    def cg_align(self, val_type: ValType, offset: int = 0) -> int:
+        # Structs: use the type of the first member
+        if val_type == ValType.OBJ:
+            pass
+        if val_type in (ValType.VOID, ValType.OBJ, ValType.CUSTOM):
+            fatal(f"No QBE size for type kind {val_type.name}")
+        if val_type in (ValType.BOOL, ValType.INT8, ValType.UINT8):
+            return offset
+        if val_type == ValType.REF:
+            alignment = 8
         else:
-            print(f"  ret", file=self.output)
+            alignment = max(1, val_type.bytes())
+        return (offset + (alignment - 1)) & ~(alignment - 1)
 
     def cg_jump(self, l: int) -> None:
         print(f"  jmp @L{l}", file=self.output)
+
+    def cg_abort(self):
+        print(f"  jmp @END", file=self.output)
+        self.cg_label(self.gen_label())
+
+    def cg_return(self, t, val_type: ValType):
+        if val_type != ValType.VOID:
+            qtype = self.qbe_type(val_type)
+            print(f"  %.ret ={qtype} copy %.t{t}", file=self.output)
+        self.cg_abort()
 
     def cg_if_false(self, t1: int, label: int) -> None:
         new_label = self.gen_label()

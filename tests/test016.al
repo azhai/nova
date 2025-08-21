@@ -1,3 +1,5 @@
+%% void printf(...);
+
 void main(void) {
   int32 a= 0;
   a = 255 & 3;

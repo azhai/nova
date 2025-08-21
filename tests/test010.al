@@ -1,3 +1,5 @@
+%% void printf(...);
+
 void main(void) {
   int8  a= -12;
   int16 b= 0;

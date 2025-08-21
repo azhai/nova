@@ -1,7 +1,7 @@
 """
 Note: You can grep '//-' this file to extract the grammar
 """
-
+from pprint import pprint
 from typing import Optional, List, Union
 
 from utils import fatal
@@ -56,7 +56,8 @@ class Parser:
     def match_kw(self, kw: Keyword, throw: bool = True) -> bool:
         """ 当前token是否指定的关键词 """
         curr = self.curr_token()
-        if curr.tok_type == TokType.T_KEYWORD and curr.text == kw.value:
+        if curr.tok_type == TokType.T_KEYWORD and curr.text == kw.value \
+                or curr.tok_type == TokType.T_IDENT and curr.text == Keyword.PRINTF.value:
             self.next_token()
             return True
         if throw:
@@ -168,12 +169,15 @@ class Parser:
         """
         //- function_prototype= ident_declaration LPAREN ident_declaration_list RPAREN
         //-                   | ident_declaration LPAREN VOID RPAREN
+        //-                   | ident_declaration LPAREN ELLIPSIS RPAREN
         """
-        node = self.ident_type_declaration(is_func=True)
+        node = self.ident_declaration(is_func=True)
         self.lparen()
-        if self.match_ops(OpCode.ELLIPSES, False):
+        if self.match_ops(OpCode.ELLIPSIS, False):
             node.args = []
-        elif not self.match_kw(Keyword.VOID, False):
+        elif self.match_kw(Keyword.VOID, False):
+            node.args = []
+        else:
             node.args = self.ident_declaration_list()
         self.rparen()
         return node
@@ -182,20 +186,20 @@ class Parser:
         """
         //- ident_declaration_list= ident_declaration (COMMA ident_declaration_list)*
         """
-        nodes = [self.ident_type_declaration(), ]
+        nodes = [self.ident_declaration(), ]
         while self.comma(False):
-            item = self.ident_type_declaration()
+            item = self.ident_declaration()
             if item is None:
                 break
             nodes.append(item)
         return nodes
 
-    def ident_type_declaration(self, is_func = False) -> Union[None, IdentNode, FunctionNode]:
+    def ident_declaration(self, is_func = False) -> Union[None, IdentNode, FunctionNode]:
         """
-        //- ident_type_declaration= type IDENT
+        //- ident_declaration= type IDENT
         """
-        val_type = self.type_declaration()
-        id_str = self.ident_declaration()
+        val_type = self.def_val_type()
+        id_str = self.def_id_str()
         if not id_str:
             return None
         elif is_func:
@@ -203,9 +207,9 @@ class Parser:
         else:
             return IdentNode(id_str, val_type)
 
-    def ident_declaration(self) -> str:
+    def def_id_str(self) -> str:
         """
-        //- ident_declaration= IDENT
+        //- id_str= IDENT
         """
         curr = self.curr_token()
         if curr.tok_type != TokType.T_IDENT:
@@ -213,9 +217,9 @@ class Parser:
         self.next_token()
         return curr.text
 
-    def type_declaration(self) -> ValType:
+    def def_val_type(self) -> ValType:
         """
-        //- type= built-in type | user-defined type
+        //- val_type= built-in type | user-defined type
         """
         curr = self.curr_token()
         if curr.tok_type != TokType.T_KEYWORD:
@@ -232,7 +236,7 @@ class Parser:
             curr = self.curr_token()
             if not curr.is_type():
                 break
-            decl = self.ident_type_declaration()
+            decl = self.ident_declaration()
             if self.assign(False):
                 expr = self.expression()
                 decl = VariableNode.from_ident(decl, expr)
@@ -272,7 +276,9 @@ class Parser:
         if curr.tok_type == TokType.T_OPERATOR and curr.value == OpCode.RBRACE:
             return None
         if curr.tok_type == TokType.T_IDENT:
-            if self.peek_ops(OpCode.LPAREN):
+            if curr.text == Keyword.PRINTF.value:
+                return self.print_statement()
+            elif self.peek_ops(OpCode.LPAREN):
                 proc = self.function_call(curr)
             else:
                 proc = self.assign_stmt()
@@ -448,7 +454,7 @@ class Parser:
         """
         id_str = ""
         if self.peek_ops(OpCode.ASSIGN):
-            id_str = self.ident_declaration()
+            id_str = self.def_id_str()
             self.assign()
         node = self.factor()
         node.name = id_str
@@ -470,7 +476,9 @@ class Parser:
             self.next_token()
             return node
         elif curr.tok_type == TokType.T_IDENT:
-            if self.peek_ops(OpCode.LPAREN):
+            if curr.text == Keyword.PRINTF.value:
+                return self.print_statement()
+            elif self.peek_ops(OpCode.LPAREN):
                 return self.function_call(curr)
             else:
                 return self.variable(curr)

@@ -1,3 +1,5 @@
+%% void printf(...);
+
 void main(void) {
   int8   a = 0;
   uint8  b = 0;

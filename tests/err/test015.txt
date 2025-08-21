@@ -1,1 +1,1 @@
-test015.al line 6: Incompatible types int32 vs bool
+test015.al line 8: Incompatible types int32 vs bool

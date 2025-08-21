@@ -1,3 +1,4 @@
+import pprint
 import sys
 from typing import Optional, List
 
@@ -316,7 +317,7 @@ def gen_ast(node: Optional[ASTNode]) -> int:
         return codegen.cg_cast(right_temp, val_type, new_type)
     elif node.op == NodeType.A_RETURN:
         expr_temp = gen_ast(node.right)
-        codegen.cg_ret(expr_temp)
+        codegen.cg_return(expr_temp, node.val_type)
         return expr_temp
     else:
         fatal(f"Unknown AST node type: {node.op}")

@@ -1,3 +1,5 @@
+%% void printf(...);
+
 void main(void) {
   int32 a= 12;
   int32 b= 10;

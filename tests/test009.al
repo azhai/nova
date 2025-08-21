@@ -1,3 +1,5 @@
+%% void printf(...);
+
 void main(void) {
   int32 x = 2 + 3 * 5;
   flt32 f= 3.2 + 2.3;

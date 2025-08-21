@@ -1,3 +1,5 @@
+%% void printf(...);
+
 void main(void) {
   bool fred = true;
   bool jim = false;

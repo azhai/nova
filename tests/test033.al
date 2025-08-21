@@ -1,3 +1,5 @@
+%% void printf(...);
+
 void fred(int32 x, int16 y) {
   int32 a= 5;
   printf("fred has argument x=%d\n", x);

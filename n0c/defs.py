@@ -55,7 +55,7 @@ class OpCode(IntEnum):
     DOT = 12
     RANGE = 13
     RANGE_TOP = 14
-    ELLIPSES = 15
+    ELLIPSIS = 15
     COMMA = 16
     COLON = 17
     SEMI = 18
@@ -176,12 +176,15 @@ def create_keyword_token(word: str) -> Token:
 
 
 class ValType(StrEnum):
+    NOTHING = ""
     VOID = "void"
     BOOL = "bool"
     STR = "str"
     PTR = "ptr"
     OBJ = "obj"
     REF = "ref"
+    ENUM = "enum"
+    CUSTOM = "type"
 
     INT8 = "int8"
     INT16 = "int16"
