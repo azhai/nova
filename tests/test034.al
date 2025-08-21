@@ -4,5 +4,5 @@ void fred(int32 x, int16 y) {
 }
 
 void main(void) {
-  printf("We should not be able to print this %d\n", x);
+  printf("We should not be able to printf this %d\n", x);
 }

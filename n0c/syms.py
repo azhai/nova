@@ -2,6 +2,7 @@ from typing import Optional, List
 
 from utils import fatal
 from defs import ASTNode, Symbol, SymType, ValType
+from stmts import widen_type
 from cgen import cg_glob_sym
 
 
@@ -109,8 +110,8 @@ class Scope:
                 fatal(f"{sym.name}() declaration: param {arg.name} type mismatch {param.val_type} vs {arg.val_type}")
 
     @staticmethod
-    def check_call_params(sym: Symbol, params: List[ASTNode]):
-        """ 检查函数原型和调用的参数是否符合 """
+    def check_call_params(sym: Symbol, params: List[ASTNode]) -> List[ASTNode]:
+        """ 检查函数原型和调用的参数是否符合，之前先将参数按对应名称重组 """
         if len(sym.args) > len(params):
             fatal(f"{sym.name}() declaration: # params different than previous")
         for i, arg in enumerate(sym.args):
@@ -119,5 +120,7 @@ class Scope:
             except IndexError:
                 fatal(f"{sym.name}() declaration: # params different than previous")
                 break
+            if param.val_type != arg.val_type:
+                param = widen_type(param, arg.val_type)
             if param.val_type != arg.val_type:
                 fatal(f"{sym.name}() declaration: param {arg.name} type mismatch {param.val_type} vs {arg.val_type}")

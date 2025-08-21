@@ -26,17 +26,26 @@ class Parser:
         self.queue = TokenQueue(lexer.scan())
         self.scope = Scope("global")
 
-    def next_token(self) -> Optional[Token]:
+    def ignore_comment(self, tok: Token) -> Token:
         """ 获取下一个token，跳过注释 """
-        tk = self.queue.next_token()
         while True:
-            if tk.tok_type not in (TokType.T_COMMENT, TokType.T_WHITESPACE):
-                return tk
-            tk = self.queue.next_token()
+            if tok.tok_type not in (TokType.T_COMMENT, TokType.T_WHITESPACE):
+                return tok
+            tok = self.queue.next_token()
+
+    def curr_token(self) -> Token:
+        """ 获取当前token，跳过注释 """
+        tok = self.queue.curr_token()
+        return self.ignore_comment(tok)
+
+    def next_token(self) -> Token:
+        """ 获取下一个token，跳过注释 """
+        tok = self.queue.next_token()
+        return self.ignore_comment(tok)
 
     def match_type(self, token_type: TokType, throw: bool = True) -> bool:
         """ 当前token是否指定类型，如果是，则前进一步，如果否，则可选择报错退出 """
-        curr = self.queue.curr_token()
+        curr = self.curr_token()
         if curr.tok_type == token_type:
             self.next_token()
             return True
@@ -46,7 +55,7 @@ class Parser:
 
     def match_kw(self, kw: Keyword, throw: bool = True) -> bool:
         """ 当前token是否指定的关键词 """
-        curr = self.queue.curr_token()
+        curr = self.curr_token()
         if curr.tok_type == TokType.T_KEYWORD and curr.text == kw.value:
             self.next_token()
             return True
@@ -56,7 +65,7 @@ class Parser:
 
     def match_ops(self, *op_codes, **kwargs) -> Optional[Operator]:
         """ 当前token是否在指定的操作符之内 """
-        curr = self.queue.curr_token()
+        curr = self.curr_token()
         if isinstance(curr, Operator) and curr.value in op_codes:
             self.next_token()
             return curr
@@ -65,7 +74,7 @@ class Parser:
         return None
 
     def match_infix(self, **kwargs) -> Optional[Operator]:
-        curr = self.queue.curr_token()
+        curr = self.curr_token()
         if isinstance(curr, Operator) and curr.prece > 0:
             self.next_token()
             return curr
@@ -76,6 +85,7 @@ class Parser:
     def peek_ops(self, *op_codes, ahead = 1) -> Optional[Operator]:
         """ 看下一个token是否在指定操作符之内 """
         tok = self.queue.get_token(ahead=ahead)
+        tok = self.ignore_comment(tok)
         if isinstance(tok, Operator) and tok.value in op_codes:
             return tok
         return None
@@ -159,48 +169,59 @@ class Parser:
         //- function_prototype= ident_declaration LPAREN ident_declaration_list RPAREN
         //-                   | ident_declaration LPAREN VOID RPAREN
         """
-        node = self.ident_declaration(is_func=True)
+        node = self.ident_type_declaration(is_func=True)
         self.lparen()
-        if not self.match_kw(Keyword.VOID, False):
+        if self.match_ops(OpCode.ELLIPSES, False):
+            node.args = []
+        elif not self.match_kw(Keyword.VOID, False):
             node.args = self.ident_declaration_list()
         self.rparen()
         return node
-
-    def type_declaration(self) -> ValType:
-        """
-        //- type= built-in type | user-defined type
-        """
-        curr = self.queue.curr_token()
-        if curr.tok_type != TokType.T_KEYWORD:
-            fatal(f"Unknown type {curr}")
-        self.next_token()
-        return ValType(curr.text)
 
     def ident_declaration_list(self) -> List[ASTNode]:
         """
         //- ident_declaration_list= ident_declaration (COMMA ident_declaration_list)*
         """
-        nodes = [self.ident_declaration(), ]
+        nodes = [self.ident_type_declaration(), ]
         while self.comma(False):
-            item = self.ident_declaration()
+            item = self.ident_type_declaration()
             if item is None:
                 break
             nodes.append(item)
         return nodes
 
-    def ident_declaration(self, is_func = False) -> Union[None, IdentNode, FunctionNode]:
+    def ident_type_declaration(self, is_func = False) -> Union[None, IdentNode, FunctionNode]:
         """
-        //- ident_declaration= type IDENT
+        //- ident_type_declaration= type IDENT
         """
         val_type = self.type_declaration()
-        curr = self.queue.curr_token()
-        if curr.tok_type != TokType.T_IDENT:
+        id_str = self.ident_declaration()
+        if not id_str:
             return None
-        self.next_token()
-        if is_func:
-            return FunctionNode(curr.text, val_type)
+        elif is_func:
+            return FunctionNode(id_str, val_type)
         else:
-            return IdentNode(curr.text, val_type)
+            return IdentNode(id_str, val_type)
+
+    def ident_declaration(self) -> str:
+        """
+        //- ident_declaration= IDENT
+        """
+        curr = self.curr_token()
+        if curr.tok_type != TokType.T_IDENT:
+            return ""
+        self.next_token()
+        return curr.text
+
+    def type_declaration(self) -> ValType:
+        """
+        //- type= built-in type | user-defined type
+        """
+        curr = self.curr_token()
+        if curr.tok_type != TokType.T_KEYWORD:
+            fatal(f"Unknown type {curr}")
+        self.next_token()
+        return ValType(curr.text)
 
     def declaration_stmt_list(self) -> ASTNode:
         """
@@ -208,10 +229,10 @@ class Parser:
         """
         node = ASTNode(NodeType.A_GLUE)
         while True:
-            curr = self.queue.curr_token()
+            curr = self.curr_token()
             if not curr.is_type():
                 break
-            decl = self.ident_declaration()
+            decl = self.ident_type_declaration()
             if self.assign(False):
                 expr = self.expression()
                 decl = VariableNode.from_ident(decl, expr)
@@ -231,6 +252,7 @@ class Parser:
             last = self.procedural_stmt()
             if not last:
                 break
+            self.semi(False)
             node.args.append(last)
         return node
 
@@ -242,18 +264,20 @@ class Parser:
         //-                  | if_stmt
         //-                  | while_stmt
         //-                  | for_stmt
+        //-                  | return_stmt
         //-                  | function_call
         //-                  )
         """
-        curr = self.queue.curr_token()
+        curr = self.curr_token()
         if curr.tok_type == TokType.T_OPERATOR and curr.value == OpCode.RBRACE:
             return None
         if curr.tok_type == TokType.T_IDENT:
             if self.peek_ops(OpCode.LPAREN):
                 proc = self.function_call(curr)
             else:
-                proc = self.short_assign_stmt()
-                self.semi()
+                proc = self.assign_stmt()
+                # if not self.match_ops(OpCode.SEMI):
+                #     self.semi()
             return proc
         if curr.tok_type == TokType.T_KEYWORD:
             if curr.text == Keyword.PRINTF.value:
@@ -264,6 +288,8 @@ class Parser:
                 return self.while_stmt()
             elif curr.text == Keyword.FOR.value:
                 return self.for_stmt()
+            elif curr.text == Keyword.RETURN.value:
+                return self.return_stmt()
         return fatal(f"Unexpected token {curr.tok_type}:{curr.text} in procedural statement")
 
     def statement_block(self) -> Optional[ASTNode]:
@@ -283,21 +309,30 @@ class Parser:
     def print_statement(self) -> ASTNode:
         self.match_kw(Keyword.PRINTF)
         self.lparen()
-        left = self.factor()
+        left = self.primary_expression()
         assert isinstance(left, LiteralNode) and left.string != ""
         self.comma()
         right = self.expression()
         self.rparen()
-        self.semi()
+        # self.semi()
         if right.val_type == ValType.FLOAT32:
             right = widen_type(right, ValType.FLOAT64)
         return PrintfNode(left, right)
 
-    def short_assign_stmt(self) -> AssignNode:
+    def assign_stmt(self, curr: Optional[Token] = None) -> AssignNode:
         """
         //- short_assign_stmt= variable ASSIGN expression
         """
-        curr = self.queue.curr_token()
+        node = self.short_assign_stmt(curr)
+        self.semi()
+        return node
+
+    def short_assign_stmt(self, curr: Optional[Token] = None) -> AssignNode:
+        """
+        //- short_assign_stmt= variable ASSIGN expression
+        """
+        if curr is None:
+            curr = self.curr_token()
         var = self.variable(curr)
         self.assign()
         right = self.expression()
@@ -338,8 +373,7 @@ class Parser:
         self.lparen()
         cond, init, incr = None, None, None
         if not self.semi(False):
-            init = self.short_assign_stmt()
-            self.semi()
+            init = self.assign_stmt()
         if not self.semi(False):
             cond = self.expression(min_op=OpCode.LOG_OR)
             self.semi()
@@ -348,6 +382,24 @@ class Parser:
             self.rparen()
         body = self.statement_block()
         return ForNode(cond, init, body, incr)
+
+    def return_stmt(self) -> ASTNode:
+        """
+        //- return_stmt= RETURN LPAREN expression RPAREN SEMI
+        //-           | RETURN expression SEMI
+        //-           | RETURN SEMI
+        """
+        self.match_kw(Keyword.RETURN)
+        node = ASTNode(NodeType.A_RETURN)
+        if self.semi(False):
+            node.val_type = ValType.VOID
+            return node
+        self.lparen(False)
+        result = self.expression()
+        self.rparen(False)
+        # self.semi()
+        node.val_type, node.right = result.val_type, result
+        return node
 
     def expression_list(self) -> ASTNode:
         """
@@ -369,7 +421,7 @@ class Parser:
         """
         left, curr_op = None, self.match_ops(*Operator.unary_ops)
         if curr_op is None: # 没有前缀运算符
-            left, curr_op = self.factor(), self.match_infix()
+            left, curr_op = self.primary_expression(), self.match_infix()
         elif curr_op.value == OpCode.SUB:
             curr_op.value = OpCode.NEG
         while curr_op is not None: # 表达式未结束
@@ -379,7 +431,7 @@ class Parser:
         return left
 
     def infix_expression(self, left, curr_op):
-        right, next_op = self.factor(), self.match_infix()
+        right, next_op = self.primary_expression(), self.match_infix()
         while next_op and next_op.prece > curr_op.prece:
             right, next_op = self.infix_expression(right, next_op)
         op = NodeType(curr_op.value)
@@ -388,6 +440,19 @@ class Parser:
         else:
             right = BinaryOp(left, op, right)
         return right, next_op
+
+    def primary_expression(self) -> Optional[ASTNode]:
+        """
+        //- primary_expression= factor
+        //-                   | IDENT ASSIGN factor
+        """
+        id_str = ""
+        if self.peek_ops(OpCode.ASSIGN):
+            id_str = self.ident_declaration()
+            self.assign()
+        node = self.factor()
+        node.name = id_str
+        return node
 
     def factor(self) -> Optional[ASTNode]:
         """
@@ -399,7 +464,7 @@ class Parser:
         //-       | variable
         //-       | call
         """
-        curr = self.queue.curr_token()
+        curr = self.curr_token()
         node = self.literal(curr)
         if node:
             self.next_token()
@@ -463,15 +528,12 @@ class Parser:
         """
         self.match_type(TokType.T_IDENT)
         self.lparen()
-        param_list = None
-        if not self.rparen(False):
-            param_list = self.expression_list()
-            self.rparen()
-        self.semi()
+        param_list = self.expression_list()
+        self.rparen()
         args = param_list.args or []
-        node = CallNode(curr.text, args)
         # 获取函数原型
-        sym = self.scope.get_symbol(node.name, SymType.S_FUNC)
-        self.scope.check_call_params(sym, args)
+        sym = self.scope.get_symbol(curr.text, SymType.S_FUNC)
+        args = self.scope.check_call_params(sym, args)
+        node = CallNode(curr.text, args)
         node.set_symbol(sym)
         return node

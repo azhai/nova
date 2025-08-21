@@ -315,7 +315,7 @@ def gen_ast(node: Optional[ASTNode]) -> int:
         val_type, new_type = node.right.val_type, node.val_type
         return codegen.cg_cast(right_temp, val_type, new_type)
     elif node.op == NodeType.A_RETURN:
-        expr_temp = gen_ast(node.left)
+        expr_temp = gen_ast(node.right)
         codegen.cg_ret(expr_temp)
         return expr_temp
     else:

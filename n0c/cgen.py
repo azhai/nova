@@ -152,9 +152,9 @@ class CodeGenerator:
             size = 8
         print(f"  %{sym.name} =l alloc{size} 1", file=self.output)
 
-    def cg_ret(self, node=None):
-        if node:
-            print(f"  ret {node}", file=self.output)
+    def cg_ret(self, t=None):
+        if t:
+            print(f"  ret %.t{t}", file=self.output)
         else:
             print(f"  ret", file=self.output)
 

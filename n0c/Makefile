@@ -1,8 +1,5 @@
-t00:
-	./app.py ../t00.al
-
-t03:
-	./app.py ../t03.al
+test001:
+	./app.py -d ../tests/test001.al
 
 test:
 	(cd ../tests; make n0c)

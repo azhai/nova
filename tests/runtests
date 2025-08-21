@@ -6,17 +6,18 @@ EXE="$1"
 
 # Build our compiler if needed
 if [ ! -f "$EXE" ]
-then (cd ../alc; make)
+then (cd ../n1c; make)
 fi
 
 mkdir -p ssa/
 
 # Try to use each input source file
-for i in test*.al
+for n in $(seq -f "%03g" 35 38)
 # We can't do anything if there's no file to test against
 do
-  j="${i%.al}.txt"
-  k="ssa/${i%.al}.q"
+  i="test$n.al"
+  j="test$n.txt"
+  k="ssa/test$n.q"
   if [ ! -f "out/$j" -a ! -f "err/$j" ]
    then echo "Can't run test on $i, no output or error file!"; exit 1
 
